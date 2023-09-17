@@ -1,0 +1,198 @@
+Shader "Custom/#SCRIPTNAME#"
+{
+    Properties
+    {
+        _MainTex ("Albedo (RGB)", 2D) = "white" {}
+
+        _Color ("Color", Color) = (1.0, 1.0, 1.0, 1.0)
+
+        _Glossiness ("Smoothness", Range(0.0, 1.0)) = 0.5
+
+        _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
+
+
+        // ------------------------------------------------------------
+        [Header(Rendering Parameters)]
+        [Space(8)]
+
+        [Enum(UnityEngine.Rendering.CullMode)]
+        _Cull ("Culling Mode", Int) = 2  // Default: Back
+
+        // [HideInInspector]
+        // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
+        // _Mode ("Rendering Mode", Int) = 2
+
+        [Toggle(_ALPHATEST_ON)]
+        _AlphaTest ("Alpha test", Int) = 0
+
+        _Cutoff ("Alpha Cutoff", Range (0.0, 1.0)) = 0.5
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlend ("Blend Source Factor", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlend ("Blend Destination Factor", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlendAlpha ("Blend Source Factor for Alpha", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlendAlpha ("Blend Destination Factor for Alpha", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOp ("Blend Operation", Int) = 0  // Default: Add
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOpAlpha ("Blend Operation for Alpha", Int) = 0  // Default: Add
+
+        [Enum(Off, 0, On, 1)]
+        _ZWrite ("ZWrite", Int) = 1  // Default: On
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _ZTest ("ZTest", Int) = 4  // Default: LEqual
+
+        [Enum(False, 0, True, 1)]
+        _ZClip ("ZClip", Int) = 1  // Default: True
+
+        [Enum(2D, 0, 3D, 1)]
+        _OffsetFact ("Offset Factor", Int) = 0
+
+        _OffsetUnit ("Offset Units", Range(-100, 100)) = 0
+
+        [ColorMask]
+        _ColorMask ("Color Mask", Int) = 15  // Default: RGBA
+
+        [Enum(Off, 0, On, 1)]
+        _AlphaToMask ("Alpha To Mask", Int) = 0  // Default: Off
+
+
+        // ------------------------------------------------------------
+        [Header(Stencil Parameters)]
+        [Space(8)]
+
+        [IntRange]
+        _StencilRef ("Stencil Reference Value", Range(0, 255)) = 0
+
+        [IntRange]
+        _StencilReadMask ("Stencil ReadMask Value", Range(0, 255)) = 255
+
+        [IntRange]
+        _StencilWriteMask ("Stencil WriteMask Value", Range(0, 255)) = 255
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _StencilComp ("Stencil Compare Function", Int) = 8  // Default: Always
+
+        [Enum (UnityEngine.Rendering.StencilOp)]
+        _StencilPass ("Stencil Pass", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilFail ("Stencil Fail", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilZFail ("Stencil ZFail", Int) = 0  // Default: Keep
+    }
+
+    // Blend Mode  | RenderQueue   | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
+    // ------------|---------------|---------------------|--------|--------------|-----------------------|----------
+    // Opaque      | "Geometry"    | "Opaque"            | On     | One (1)      | Zero (0)              | x
+    // Cutout      | "AlphaTest"   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
+    // Fade        | "Transparent" | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
+    // Transparent | "Transparent" | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
+
+    SubShader
+    {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "Queue" = "Geometry"
+            "VRCFallback" = "StandardFade"
+        }
+
+        LOD 200
+
+        Cull [_Cull]
+        Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
+        BlendOp [_BlendOp], [_BlendOpAlpha]
+        ZWrite [_ZWrite]
+        ZTest [_ZTest]
+        ZClip [_ZClip]
+        Offset [_OffsetFact], [_OffsetUnit]
+        ColorMask [_ColorMask]
+        AlphaToMask [_AlphaToMask]
+
+        Stencil
+        {
+            Ref [_StencilRef]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+            Comp [_StencilComp]
+            Pass [_StencilPass]
+            Fail [_StencilFail]
+            ZFail [_StencilZFail]
+        }
+
+        CGPROGRAM
+        // Physically based Standard lighting model, and enable shadows on all light types
+        #pragma surface surf Standard fullforwardshadows
+        // Use shader model 3.0 target, to get nicer looking lighting
+        #pragma target 3.0
+
+        #pragma shader_feature_local _ _ALPHATEST_ON
+
+
+        /*!
+         * Input structure for @see surf
+         */
+        struct Input
+        {
+            // UV coordinate for _MainTex.
+            float2 uv_MainTex;
+        };
+
+
+        //! Main texture.
+        UNITY_DECLARE_TEX2D(_MainTex);
+        //! Main texture.
+        uniform fixed4 _Color;
+        //! Value of smoothness.
+        uniform half _Glossiness;
+        //! Value of Metallic.
+        uniform half _Metallic;
+        //! Alpha Cutoff.
+        uniform half _Cutoff;
+
+
+        // Add instancing support for this shader. You need to check 'Enable Instancing' on materials that use the shader.
+        // See https://docs.unity3d.com/Manual/GPUInstancing.html for more information about instancing.
+        // #pragma instancing_options assumeuniformscaling
+        UNITY_INSTANCING_BUFFER_START(Props)
+            // put more per-instance properties here
+            // UNITY_DEFINE_INSTANCED_PROP(fixed4, _Color)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
+        /*!
+         * @brief Setup lighting parameters.
+         * @param [in] IN  Input parameter.
+         * @param [inout] o  Lighting parameters.
+         */
+        void surf(Input IN, inout SurfaceOutputStandard o)
+        {
+            // Albedo comes from a texture tinted by color
+            fixed4 c = UNITY_SAMPLE_TEX2D(_MainTex, IN.uv_MainTex) * _Color;
+        #ifdef _ALPHATEST_ON
+            clip(c.a - _Cutoff);
+        #endif  // _ALPHATEST_ON
+            o.Albedo = c.rgb;
+            // Metallic and smoothness come from slider variables
+            o.Metallic = _Metallic;
+            o.Smoothness = _Glossiness;
+            o.Alpha = c.a;
+        }
+        ENDCG
+    }
+
+    FallBack "Diffuse"
+    // Fallback "Transparent/Cutout/Diffuse"
+    // Fallback "Transparent/Diffuse"
+    // CustomEditor "#SCRIPTNAME#GUI"
+}
