@@ -1,0 +1,1016 @@
+Shader "Custom/#SCRIPTNAME#"
+{
+    Properties
+    {
+        // ------------------------------------------------------------
+        [Header(Ray Marching Parameters)]
+        [Space(8)]
+
+        [IntRange]
+        _MaxLoop ("Maximum loop count for ForwardBase", Range(8, 1024)) = 128
+
+        [IntRange]
+        _MaxLoopForwardAdd ("Maximum loop count for ForwardAdd", Range(8, 1024)) = 64
+
+        [IntRange]
+        _MaxLoopShadowCaster ("Maximum loop count for ShadowCaster", Range(8, 1024)) = 32
+
+        _MinRayLength ("Minimum length of the ray", Float) = 0.001
+        _MaxRayLength ("Maximum length of the ray", Float) = 1000.0
+
+        _MarchingFactor ("Marching Factor", Range(0.5, 1.0)) = 1.0
+
+        _Scales ("Scale vector", Vector) = (1.0, 1.0, 1.0, 1.0)
+
+
+        // ------------------------------------------------------------
+        [Header(SDF Parameters)]
+        [Space(8)]
+
+        _Color ("Color of the objects", Color) = (1.0, 1.0, 1.0, 1.0)
+
+
+        // ------------------------------------------------------------
+        [Header(Lighting Parameters)]
+        [Space(8)]
+
+        [KeywordEnum(Unity Lambert, Unity Blinn Phong, Unity Standard, Unity Standard Specular, Unlit, Custom)]
+        _Lighting ("Lighting method", Int) = 0
+
+        _Glossiness ("Smoothness", Range(0.0, 1.0)) = 0.5
+        _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
+
+        _SpecColor ("Specular Color", Color) = (0.5, 0.5, 0.5, 1.0)
+        _SpecPower ("Specular Power", Range(0.0, 128.0)) = 16.0
+
+
+        // ------------------------------------------------------------
+        [Header(Rendering Parameters)]
+        [Space(8)]
+
+        [Toggle(_NOFORWARDADD_ON)]
+        _NoForwardAdd ("Disable ForwardAdd Pass", Int) = 0
+
+        [Enum(UnityEngine.Rendering.CullMode)]
+        _Cull ("Culling Mode", Int) = 2  // Default: Back
+
+        // [HideInInspector]
+        // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
+        // _Mode ("Rendering Mode", Int) = 0
+
+        // keyword: _ALPHATEST_ON
+        // [Toggle(_ALPHATEST_ON)]
+        // _AlphaTest ("Alpha test", Int) = 0
+
+        // _Cutoff ("Alpha Cutoff", Range (0.0, 1.0)) = 0.5
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlend ("Blend Source Factor", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlend ("Blend Destination Factor", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlendAlpha ("Blend Source Factor for Alpha", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlendAlpha ("Blend Destination Factor for Alpha", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOp ("Blend Operation", Int) = 0  // Default: Add
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOpAlpha ("Blend Operation for Alpha", Int) = 0  // Default: Add
+
+        [Enum(Off, 0, On, 1)]
+        _ZWrite ("ZWrite", Int) = 1  // Default: On
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _ZTest ("ZTest", Int) = 4  // Default: LEqual
+
+        [Enum(False, 0, True, 1)]
+        _ZClip ("ZClip", Int) = 1  // Default: True
+
+        [Enum(2D, 0, 3D, 1)]
+        _OffsetFact ("Offset Factor", Int) = 0
+
+        _OffsetUnit ("Offset Units", Range(-100, 100)) = 0
+
+        [ColorMask]
+        _ColorMask ("Color Mask", Int) = 15  // Default: RGBA
+
+        [Enum(Off, 0, On, 1)]
+        _AlphaToMask ("Alpha To Mask", Int) = 0  // Default: Off
+
+
+        // ------------------------------------------------------------
+        [Header(Stencil Parameters)]
+        [Space(8)]
+
+        [IntRange]
+        _StencilRef ("Stencil Reference Value", Range(0, 255)) = 0
+
+        [IntRange]
+        _StencilReadMask ("Stencil ReadMask Value", Range(0, 255)) = 255
+
+        [IntRange]
+        _StencilWriteMask ("Stencil WriteMask Value", Range(0, 255)) = 255
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _StencilComp ("Stencil Compare Function", Int) = 8  // Default: Always
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilPass ("Stencil Pass", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilFail ("Stencil Fail", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilZFail ("Stencil ZFail", Int) = 0  // Default: Keep
+    }
+
+    // Blend Mode  | RenderQueue   | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
+    // ------------|---------------|---------------------|--------|--------------|-----------------------|----------
+    // Opaque      | "Geometry"    | "Opaque"            | On     | One (1)      | Zero (0)              | x
+    // Cutout      | "AlphaTest"   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
+    // Fade        | "Transparent" | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
+    // Transparent | "Transparent" | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
+
+    SubShader
+    {
+        Tags
+        {
+            "RenderType" = "TransparentCutout"
+            "Queue" = "AlphaTest"
+            "DisableBatching" = "True"
+            "IgnoreProjector" = "True"
+            "VRCFallback" = "Hidden"
+        }
+
+        BlendOp [_BlendOp], [_BlendOpAlpha]
+        ZTest [_ZTest]
+        ZClip [_ZClip]
+        Offset [_OffsetFact], [_OffsetUnit]
+        ColorMask [_ColorMask]
+        AlphaToMask [_AlphaToMask]
+
+        Stencil
+        {
+            Ref [_StencilRef]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+            Comp [_StencilComp]
+            Pass [_StencilPass]
+            Fail [_StencilFail]
+            ZFail [_StencilZFail]
+        }
+
+        CGINCLUDE
+        #pragma target 3.0
+
+        // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
+        #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
+
+        #define OPTIMIZE_BOX_PROJECTION 1
+
+        #include "UnityCG.cginc"
+        #include "UnityStandardUtils.cginc"
+
+        #ifdef OPTIMIZE_BOX_PROJECTION
+        float3 boxProj(float3 worldRefDir, float3 worldPos, float4 probePos, float4 boxMin, float4 boxMax);
+        #    define BoxProjectedCubemapDirection boxProj
+        #endif  // OPTIMIZE_BOX_PROJECTION
+
+        #include "AutoLight.cginc"
+        #include "Lighting.cginc"
+        #include "UnityPBSLighting.cginc"
+
+
+        //! Maximum loop count for ForwardBase.
+        uniform int _MaxLoop;
+        //! Maximum loop count for ForwardAdd.
+        uniform int _MaxLoopForwardAdd;
+        //! Maximum loop count for ShadowCaster.
+        uniform int _MaxLoopShadowCaster;
+        //! Minimum length of the ray.
+        uniform float _MinRayLength;
+        //! Maximum length of the ray.
+        uniform float _MaxRayLength;
+        //! Marching Factor.
+        uniform float _MarchingFactor;
+        //! Scale vector.
+        uniform float3 _Scales;
+
+        //! Color of the objects.
+        uniform float4 _Color;
+        // #ifdef _ALPHATEST_ON
+        // //! Alpha Cutoff.
+        // uniform float _Cutoff;
+        // #endif  // _ALPHATEST_ON
+
+        //! Value of smoothness.
+        uniform half _Glossiness;
+        //! Value of Metallic.
+        uniform half _Metallic;
+
+        #ifndef UNITY_LIGHTING_COMMON_INCLUDED
+        //! Color of light.
+        uniform fixed4 _LightColor0;
+        #endif  // UNITY_LIGHTING_COMMON_INCLUDED
+        #if !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
+        //! Specular color.
+        uniform half4 _SpecColor;
+        #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
+        //! Specular power.
+        uniform float _SpecPower;
+
+
+        // UNITY_INSTANCING_BUFFER_START(Props)
+        //     UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
+        // UNITY_INSTANCING_BUFFER_END(Props)
+
+        /*!
+         * @brief Input data type for vertex shader function, vert().
+         * @see vert
+         */
+        struct appdata
+        {
+            //! Object space position of the vertex.
+            float4 vertex : POSITION;
+        #ifdef LIGHTMAP_ON
+            //! Lightmap coordinate.
+            float4 texcoord1 : TEXCOORD1;
+        #endif  // LIGHTMAP_ON
+        #ifdef DYNAMICLIGHTMAP_ON
+            //! Dynamic Lightmap coordinate.
+            float4 texcoord2 : TEXCOORD2;
+        #endif  // DYNAMICLIGHTMAP_ON
+            UNITY_VERTEX_INPUT_INSTANCE_ID
+        };
+
+        /*!
+         * @brief Output of the vertex shader, vert()
+         * and input of fragment shader, frag().
+         * @see vert
+         * @see frag
+         */
+        struct v2f
+        {
+            //! Clip space position of the vertex.
+            float4 pos : SV_POSITION;
+            //! Ray origin in object space (Local space position of the camera).
+            nointerpolation float3 localRayOrigin : TEXCOORD0;
+            //! Unnormalized ray direction in object space.
+            float3 localRayDirVector : TEXCOORD1;
+            //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
+            UNITY_LIGHTING_COORDS(2, 3)
+        #if defined(LIGHTMAP_ON)
+        #    ifdef DYNAMICLIGHTMAP_ON
+            //! Lightmap and Dynamic Lightmap coordinate.
+            float4 lmap: TEXCOORD4;
+        #    else
+            //! Lightmap coordinate.
+            float2 lmap: TEXCOORD4;
+        #    endif
+        #elif defined(UNITY_SHOULD_SAMPLE_SH)
+            //! Ambient light color.
+            half3 ambient: TEXCOORD4;
+        #endif  // UNITY_SHOULD_SAMPLE_SH
+            //! Instance ID for single pass instanced rendering, instanceID.
+            UNITY_VERTEX_INPUT_INSTANCE_ID
+            //! Stereo target eye index for single pass instanced rendering, stereoTargetEyeIndex.
+            UNITY_VERTEX_OUTPUT_STEREO
+        };
+
+        /*!
+         * @brief Output of fragment shader.
+         * @see frag
+         */
+        struct fout
+        {
+            //! Output color of the pixel.
+            half4 color : SV_Target;
+            //! Depth of the pixel.
+            float depth : SV_Depth;
+        };
+
+        /*!
+         * @brief Output of rayMarch().
+         * @see rayMarch
+         */
+        struct rmout
+        {
+            //! Length of the ray.
+            float rayLength;
+            //! A flag whether the ray collided with an object or not.
+            bool isHit;
+        };
+
+
+        rmout rayMarch(float3 rayOrigin, float3 rayDir);
+        float map(float3 p);
+        float sdSphere(float3 p, float r);
+        float3 calcNormal(float3 p);
+        float getDepth(float4 projPos);
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
+        UnityGI getGI(float3 worldPos, half atten);
+        UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient);
+
+
+        /*!
+         * @brief Vertex shader function.
+         * @param [in] v  Input data.
+         * @return Interpolation source data for fragment shader function, frag().
+         * @see frag
+         */
+        v2f vert(appdata v)
+        {
+            v2f o;
+            UNITY_INITIALIZE_OUTPUT(v2f, o);
+
+            UNITY_SETUP_INSTANCE_ID(v);
+            UNITY_TRANSFER_INSTANCE_ID(v, o);
+            UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+            o.localRayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz * _Scales;
+            o.localRayDirVector = v.vertex - o.localRayOrigin;
+
+            // Static lightmaps
+            #if defined(LIGHTMAP_ON)
+            o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
+            #    ifdef DYNAMICLIGHTMAP_ON
+            o.lmap.zw = v.texcoord2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
+            #    endif  // DYNAMICLIGHTMAP_ON
+            #endif  // VERTEXLIGHT_ON
+
+            UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
+
+            v.vertex.xyz /= _Scales;
+            o.pos = UnityObjectToClipPos(v.vertex);
+
+            return o;
+        }
+
+        /*!
+         * @brief Fragment shader function.
+         * @param [in] fi  Input data from vertex shader.
+         * @return Color of texel.
+         */
+        fout frag(v2f fi)
+        {
+            UNITY_SETUP_INSTANCE_ID(fi);
+            UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+            const float3 localRayDir = normalize(fi.localRayDirVector);
+
+            const rmout ro = rayMarch(fi.localRayOrigin, localRayDir);
+            if (!ro.isHit) {
+                discard;
+            }
+
+            const float3 localFinalPos = fi.localRayOrigin + localRayDir * ro.rayLength;
+            const float3 worldFinalPos = mul(unity_ObjectToWorld, float4(localFinalPos, 1.0)).xyz;
+
+        #if defined(LIGHTMAP_ON)
+        #    ifdef DYNAMICLIGHTMAP_ON
+            const float4 lmap = fi.lmap;
+        #    else
+            const float4 lmap = float4(fi.lmap, 0.0, 0.0);
+        #    endif  // DYNAMICLIGHTMAP_ON
+        #elif defined(UNITY_SHOULD_SAMPLE_SH)
+            const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
+        #else
+            const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
+        #endif  // defined(LIGHTMAP_ON)
+
+            UNITY_LIGHT_ATTENUATION(atten, fi, worldFinalPos);
+
+            half4 color = calcLighting(
+                _Color,
+                worldFinalPos,
+                UnityObjectToWorldNormal(calcNormal(localFinalPos)),
+                atten,
+                lmap,
+                half3(0.0, 0.0, 0.0));
+
+            const float4 projPos = UnityWorldToClipPos(worldFinalPos);
+
+            UNITY_APPLY_FOG(projPos.z, color);
+
+            fout fo;
+            fo.color = color;
+            fo.depth = getDepth(projPos);
+
+            return fo;
+        }
+
+        /*!
+         * @brief Execute ray marching.
+         * @param [in] rayOrigin  Origin of the ray.
+         * @param [in] rayDir  Direction of the ray.
+         * @return Result of the ray marching.
+         */
+        rmout rayMarch(float3 rayOrigin, float3 rayDir)
+        {
+        #if defined(UNITY_PASS_FORWARDBASE)
+            const int maxLoop = _MaxLoop;
+        #elif defined(UNITY_PASS_FORWARDADD)
+            const int maxLoop = _MaxLoopForwardAdd;
+        #elif defined(UNITY_PASS_SHADOWCASTER)
+            const int maxLoop = _MaxLoopShadowCaster;
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
+
+            rmout ro;
+            ro.rayLength = 0.0;
+            ro.isHit = false;
+
+            // Loop of Ray Marching.
+            for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > _MaxRayLength) ? 0x7fffffff : i + 1) {
+                const float d = map(rayOrigin + rayDir * ro.rayLength);
+                ro.rayLength += d * _MarchingFactor;
+                ro.isHit = d < _MinRayLength;
+            }
+
+            return ro;
+        }
+
+        /*!
+         * @brief SDF (Signed Distance Function) of objects.
+         * @param [in] p  Position of the tip of the ray.
+         * @return Signed Distance to the objects.
+         */
+        float map(float3 p)
+        {
+        #ifdef UNITY_PASS_SHADOWCASTER
+            p *= _Scales;
+        #endif  // UNITY_PASS_SHADOWCASTER
+
+            //
+            // TODO: Render scene.
+            //
+
+            return sdSphere(p, 0.5);
+        }
+
+        /*!
+         * @brief SDF of sphere.
+         * @param [in] r  Radius of sphere.
+         * @return Signed Distance to the sphere.
+         */
+        float sdSphere(float3 p, float r)
+        {
+            return length(p) - r;
+        }
+
+        /*!
+         * @brief Calculate normal of the objects with tetrahedron technique.
+         * @param [in] p  Position of the tip of the ray.
+         * @return Normal of the objects.
+         * @see https://iquilezles.org/articles/normalsSDF/
+         */
+        float3 calcNormal(float3 p)
+        {
+            static const float2 k = float2(1.0, -1.0);
+            static const float3 ks[] = {k.xyy, k.yxy, k.yyx, k.xxx};
+            static const float h = 0.0001;
+
+            float3 normal = float3(0.0, 0.0, 0.0);
+
+            for (int i = 0; i < 4; i++) {
+                normal += ks[i] * map(p + ks[i] * h);
+            }
+
+            return normalize(normal);
+        }
+
+        /*!
+         * @brief Get depth from projected position.
+         * @param [in] projPos  Projected position.
+         * @return Depth value.
+         */
+        float getDepth(float4 projPos)
+        {
+            const float depth = projPos.z / projPos.w;
+        #if defined(SHADER_API_GLCORE) \
+            || defined(SHADER_API_OPENGL) \
+            || defined(SHADER_API_GLES) \
+            || defined(SHADER_API_GLES3)
+            return depth * 0.5 + 0.5;
+        #else
+            return depth;
+        #endif
+        }
+
+        /*!
+         * Calculate lighting.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient)
+        {
+        #if defined(_LIGHTING_CUSTOM)
+            return calcLightingCustom(color, worldPos, worldNormal, atten, lmap, ambient);
+        #elif defined(_LIGHTING_UNITY_LAMBERT) \
+            || defined(_LIGHTING_UNITY_BLINN_PHONG) \
+            || defined(_LIGHTING_UNITY_STANDARD) \
+            || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            return calcLightingUnity(color, worldPos, worldNormal, atten, lmap, ambient);
+        #else
+            // assume _LIGHTING_UNLIT
+            return color;
+        #endif  // defined(_LIGHTING_CUSTOM)
+        }
+
+
+        /*!
+         * Calculate lighting with lighting method on Unity Surface Shaders.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient)
+        {
+        #if defined(_LIGHTING_UNITY_STANDARD)
+        #    define LightingUnity_GI(so, giInput, gi) LightingStandard_GI(so, giInput, gi)
+        #    define LightingUnity(so, worldViewDir, gi) LightingStandard(so, worldViewDir, gi)
+            SurfaceOutputStandard so;
+            UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandard, so);
+            so.Albedo = color.rgb;
+            so.Normal = worldNormal;
+            so.Emission = half3(0.0, 0.0, 0.0);
+            so.Metallic = _Metallic;
+            so.Smoothness = _Glossiness;
+            so.Occlusion = 1.0;
+            so.Alpha = color.a;
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #    define LightingUnity_GI(so, giInput, gi) LightingStandardSpecular_GI(so, giInput, gi)
+        #    define LightingUnity(so, worldViewDir, gi) LightingStandardSpecular(so, worldViewDir, gi)
+            SurfaceOutputStandardSpecular so;
+            UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandardSpecular, so);
+            so.Albedo = color.rgb;
+            so.Specular = _SpecColor.rgb;
+            so.Normal = worldNormal;
+            so.Emission = half3(0.0, 0.0, 0.0);
+            so.Smoothness = _Glossiness;
+            so.Occlusion = 1.0;
+            so.Alpha = color.a;
+        #else
+            SurfaceOutput so;
+            UNITY_INITIALIZE_OUTPUT(SurfaceOutput, so);
+            so.Albedo = color.rgb;
+            so.Normal = worldNormal;
+            so.Emission = half3(0.0, 0.0, 0.0);
+        #    ifdef _LIGHTING_UNITY_BLINN_PHONG
+        #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
+        #        define LightingUnity(so, worldViewDir, gi) LightingBlinnPhong(so, worldViewDir, gi)
+            so.Specular = _SpecPower / 128.0;
+            so.Gloss = _Glossiness;
+            // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
+        #    else
+        #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
+        #        define LightingUnity(so, worldViewDir, gi) LightingLambert(so, gi)
+        #    endif  // defined(_LIGHTING_UNITY_BLINN_PHONG)
+            so.Alpha = color.a;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD)
+
+            UnityGI gi = getGI(worldPos, atten);
+
+            const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(worldPos));
+        #ifdef UNITY_PASS_FORWARDBASE
+        #    if !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
+            lmap = float4(0.0, 0.0, 0.0, 0.0);
+        #    endif  // !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
+            UnityGIInput giInput = getGIInput(gi.light, worldPos, worldNormal, worldViewDir, atten, lmap, ambient);
+            LightingUnity_GI(so, giInput, gi);
+        #endif  // UNITY_PASS_FORWARDBASE
+
+            half4 col = LightingUnity(so, worldViewDir, gi);
+            col.rgb += so.Emission;
+
+            return col;
+
+        #undef LightingUnity_GI
+        #undef LightingUnity
+        }
+
+        /*!
+         * Calculate lighting with custom method.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, /* unused */ float4 lmap, half3 ambient)
+        {
+            const float3 worldViewDir = normalize(_WorldSpaceCameraPos - worldPos);
+        #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+            const float3 worldLightDir = UnityWorldSpaceLightDir(worldPos);
+        #else
+            const float3 worldLightDir = normalize(UnityWorldSpaceLightDir(worldPos));
+        #endif  // defined(USING_LIGHT_MULTI_COMPILE) || defined(USING_DIRECTIONAL_LIGHT)
+            const fixed3 lightCol = _LightColor0.rgb * atten;
+
+            // Lambertian reflectance.
+            const float nDotL = dot(worldNormal, worldLightDir);
+            const half3 diffuse = lightCol * pow(nDotL * 0.5 + 0.5, 2.0);  // will be mul instruction.
+
+            // Specular reflection.
+            // const half3 specular = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), _SpecPower) * _SpecColor.rgb * lightCol;
+            const half3 specular = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), _SpecPower) * _SpecColor.rgb * lightCol;
+
+            // Ambient color.
+        #if UNITY_SHOULD_SAMPLE_SH
+            ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
+        #endif  // !UNITY_SHOULD_SAMPLE_SH
+
+            const half4 outColor = half4((diffuse + ambient) * color.rgb + specular, color.a);
+
+            return outColor;
+        }
+
+        /*!
+         * @brief Get initial instance of UnityGI.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] atten  Light attenuation.
+         * @return Initial instance of UnityGI.
+         */
+        UnityGI getGI(float3 worldPos, half atten)
+        {
+            UnityGI gi;
+            UNITY_INITIALIZE_OUTPUT(UnityGI, gi);
+        #ifdef UNITY_PASS_FORWARDBASE
+            gi.light.color = _LightColor0.rgb;
+        #else
+            gi.light.color = _LightColor0.rgb * atten;
+        #endif  // UNITY_PASS_FORWARDBASE
+        #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+            gi.light.dir = UnityWorldSpaceLightDir(worldPos);
+        #else
+            gi.light.dir = normalize(UnityWorldSpaceLightDir(worldPos));
+        #endif  // defined(USING_LIGHT_MULTI_COMPILE) || defined(USING_DIRECTIONAL_LIGHT)
+            // gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
+            // gi.indirect.specular = half3(0.0, 0.0, 0.0);
+
+            return gi;
+        }
+
+        /*!
+         * @brief Get initial instance of UnityGIInput.
+         * @param [in] light  The lighting parameter which contains color and direction of the light.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] worldViewDir  View direction in world space.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Initial instance of UnityGIInput.
+         */
+        UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient)
+        {
+            UnityGIInput giInput;
+            UNITY_INITIALIZE_OUTPUT(UnityGIInput, giInput);
+            giInput.light = light;
+            giInput.worldPos = worldPos;
+            giInput.worldViewDir = worldViewDir;
+            giInput.atten = atten;
+
+        #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
+            giInput.lightmapUV = lmap;
+        #else
+            giInput.lightmapUV = float4(0.0, 0.0, 0.0, 0.0);
+        #endif  // defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
+
+        #if UNITY_SHOULD_SAMPLE_SH
+            giInput.ambient = ambient;
+        #else
+            giInput.ambient = half3(0.0, 0.0, 0.0);
+        #endif  // UNITY_SHOULD_SAMPLE_SH
+
+        #if !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
+            giInput.probeHDR[0] = unity_SpecCube0_HDR;
+            giInput.probeHDR[1] = unity_SpecCube1_HDR;
+        #    if defined(UNITY_SPECCUBE_BLENDING) || defined(UNITY_SPECCUBE_BOX_PROJECTION)
+            giInput.boxMin[0] = unity_SpecCube0_BoxMin;
+        #    endif  // defined(UNITY_SPECCUBE_BLENDING) || defined(UNITY_SPECCUBE_BOX_PROJECTION)
+        #    ifdef UNITY_SPECCUBE_BOX_PROJECTION
+            giInput.boxMax[0] = unity_SpecCube0_BoxMax;
+            giInput.probePosition[0] = unity_SpecCube0_ProbePosition;
+            giInput.boxMax[1] = unity_SpecCube1_BoxMax;
+            giInput.boxMin[1] = unity_SpecCube1_BoxMin;
+            giInput.probePosition[1] = unity_SpecCube1_ProbePosition;
+        #    endif  // UNITY_SPECCUBE_BOX_PROJECTION
+        #endif  // !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
+
+            return giInput;
+        }
+
+        /*!
+         * @brief Obtain reflection direction considering box projection.
+         *
+         * This function is more efficient than BoxProjectedCubemapDirection() in UnityStandardUtils.cginc.
+         *
+         * @param [in] worldRefDir  Refrection dir (must be normalized).
+         * @param [in] worldPos  World coordinate.
+         * @param [in] probePos  Position of Refrection probe.
+         * @param [in] boxMin  Position of Refrection probe.
+         * @param [in] boxMax  Position of Refrection probe.
+         * @return Refrection direction considering box projection.
+         */
+        float3 boxProj(float3 worldRefDir, float3 worldPos, float4 probePos, float4 boxMin, float4 boxMax)
+        {
+            // UNITY_SPECCUBE_BOX_PROJECTION is defined if
+            // "Reflection Probes Box Projection" of GraphicsSettings is enabled.
+        #ifdef UNITY_SPECCUBE_BOX_PROJECTION
+            // probePos.w == 1.0 if Box Projection is enabled.
+            if (probePos.w > 0.0) {
+                const float3 magnitudes = ((worldRefDir > 0.0 ? boxMax.xyz : boxMin.xyz) - worldPos) / worldRefDir;
+                return worldRefDir * min(magnitudes.x, min(magnitudes.y, magnitudes.z)) + (worldPos - probePos);
+            } else {
+                return worldRefDir;
+            }
+        #else
+            return worldRefDir;
+        #endif  // UNITY_SPECCUBE_BOX_PROJECTION
+        }
+        ENDCG
+
+
+        Pass
+        {
+            Name "FORWARD_BASE"
+            Tags
+            {
+                "LightMode" = "ForwardBase"
+            }
+
+            Cull [_Cull]
+            Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
+            ZWrite [_ZWrite]
+
+            CGPROGRAM
+            #pragma multi_compile_fwdbase
+            #pragma multi_compile_fog
+
+            #pragma vertex vert
+            #pragma fragment frag
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "FORWARD_ADD"
+            Tags
+            {
+                "LightMode" = "ForwardAdd"
+            }
+
+            Cull [_Cull]
+            Blend One One
+            ZWrite Off
+
+            CGPROGRAM
+            // #pragma multi_compile_fwdadd
+            #pragma multi_compile_fwdadd_fullshadow
+            #pragma multi_compile_fog
+            #pragma shader_feature_local _ _NOFORWARDADD_ON
+
+            #pragma vertex vertForwardAdd
+            #pragma fragment fragForwardAdd
+
+            #if defined(_NOFORWARDADD_ON) || defined(_LIGHTING_UNLIT)
+            /*!
+             * @brief Input data type for vertex shader function, vertForwardAdd().
+             * @see vertForwardAdd
+             */
+            struct appdata_forwardadd
+            {
+                //! Object space position of the vertex.
+                float4 vertex : POSITION;
+            };
+
+            /*!
+             * @brief Output of the vertex shader, vertForwardAdd()
+             * and input of fragment shader, fragForwardAdd().
+             * @see vertForwardAdd
+             * @see fragForwardAdd
+             */
+            struct v2f_forwardadd
+            {
+                //! Clip space position of the vertex.
+                float4 pos : SV_POSITION;
+            };
+
+            /*!
+             * @brief Vertex shader function for ForwardAdd pass.
+             *
+             * This function outputs NaN vertice to skip fragment shader.
+             *
+             * @param [in] v  Input data.
+             * @return Interpolation source data for fragment shader function, fragForwardAdd().
+             * @see fragForwardAdd
+             */
+            v2f vertForwardAdd(appdata_forwardadd v)
+            {
+                v2f o;
+                o.pos = asfloat(0x7fc00000).xxxx;  // qNaN
+                return o;
+            }
+
+            /*!
+             * @brief Fragment shader function for ForwardAdd pass.
+             *
+             * This function will not be execute because vertForwardAdd outputs NaN vertices,
+             * and the vertices will be removed by view frustum culling.
+             *
+             * @param [in] fi  Input data from vertex shader.
+             * @return (0.0, 0.0, 0.0, 0.0).
+             */
+            half4 fragForwardAdd(v2f_forwardadd fi) : SV_Target
+            {
+                return half4(0.0, 0.0, 0.0, 0.0);
+            }
+            #else
+
+            /*!
+             * @brief Vertex shader function for ForwardAdd pass.
+             * @param [in] v  Input data.
+             * @return Interpolation source data for fragment shader function, fragForwardAdd().
+             * @see fragForwardAdd
+             */
+            v2f vertForwardAdd(appdata v)
+            {
+                return vert(v);
+            }
+
+            /*!
+             * @brief Fragment shader function.
+             * @param [in] fi  Input data from vertex shader.
+             * @return Color of texel.
+             */
+            fout fragForwardAdd(v2f fi)
+            {
+                return frag(fi);
+            }
+            #endif  // defined(_NOFORWARDADD_ON) || defined(_LIGHTING_UNLIT)
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "SHADOW_CASTER"
+            Tags
+            {
+                "LightMode" = "ShadowCaster"
+            }
+
+            Cull Back
+            Blend Off
+            ZWrite On
+
+            CGPROGRAM
+            #pragma multi_compile_shadowcaster
+            #pragma multi_compile_fog
+
+            #pragma vertex vertShadowCaster
+            #pragma fragment fragShadowCaster
+
+
+            /*!
+             * @brief Input of the vertex shader, vertShadowCaster().
+             * @see vertShadowCaster
+             */
+            struct appdata_shadowcaster
+            {
+                //! Object space position of the vertex.
+                float4 vertex : POSITION;
+            #if !defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                //! Normal vector of the vertex.
+                float3 normal : NORMAL;
+            #endif
+                //! instanceID for single pass instanced rendering.
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            /*!
+             * @brief Output of the vertex shader, vertShadowCaster()
+             * and input of fragment shader, fragShadowCaster().
+             * @see vertShadowCaster
+             * @see fragShadowCaster
+             */
+            struct v2f_shadowcaster
+            {
+                //! Shadow caster members.
+                V2F_SHADOW_CASTER;
+                //! Ray origin in object space.
+                float3 localRayOrigin : TEXCOORD1;
+                //! Unnormalized ray direction in object space.
+                float3 localRayDirVector : TEXCOORD2;
+                //! instanceID for single pass instanced rendering.
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                //! stereoTargetEyeIndex for single pass instanced rendering.
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+
+            float3 getCameraDirectionVector(float4 projPos);
+
+
+            /*!
+             * @brief Vertex shader function for ShadowCaster pass.
+             * @param [in] v  Input data.
+             * @return Interpolation source data for fragment shader function, fragShadowCaster().
+             * @see fragShadowCaster
+             */
+            v2f_shadowcaster vertShadowCaster(appdata_shadowcaster v)
+            {
+                v2f_shadowcaster o;
+                UNITY_INITIALIZE_OUTPUT(v2f_shadowcaster, o);
+
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                TRANSFER_SHADOW_CASTER(o)
+
+                o.localRayOrigin = v.vertex.xyz;
+
+                float4 projPos = ComputeNonStereoScreenPos(o.pos);
+                COMPUTE_EYEDEPTH(projPos.z);
+            #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                o.localRayDirVector = mul((float3x3)unity_WorldToObject, getCameraDirectionVector(projPos));
+            #else
+                o.localRayDirVector = UNITY_MATRIX_P[3][3] == 1.0 ? mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz)
+                    : abs(unity_LightShadowBias.x) < 1.0e-5 ? (v.vertex.xyz - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz)
+                    : mul((float3x3)unity_WorldToObject, getCameraDirectionVector(projPos));
+            #endif
+
+                return o;
+            }
+
+            /*!
+             * @brief Fragment shader function for ShadowCaster pass.
+             * @param [in] fi  Input data from vertex shader.
+             * @return Color of texel.
+             */
+            fout fragShadowCaster(v2f_shadowcaster fi)
+            {
+                UNITY_SETUP_INSTANCE_ID(fi);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+                const float3 localRayDir = normalize(fi.localRayDirVector);
+
+                const rmout ro = rayMarch(fi.localRayOrigin, localRayDir);
+                if (!ro.isHit) {
+                    discard;
+                }
+
+                const float3 localFinalPos = fi.localRayOrigin + localRayDir * ro.rayLength;
+                const float3 worldFinalPos = mul(unity_ObjectToWorld, float4(localFinalPos, 1.0)).xyz;
+
+            #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                fi.vec = worldFinalPos - _LightPositionRange.xyz;
+                SHADOW_CASTER_FRAGMENT(fi);
+            #else
+                fout fo;
+                fo.color = fo.depth = getDepth(UnityWorldToClipPos(worldFinalPos));
+                return fo;
+            #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+            }
+
+
+            /*!
+             * @brief Get unnormalized camera direction vector from projected position.
+             * @param [in] Projected position.
+             * @return Camera direction in world space.
+             */
+            float3 getCameraDirectionVector(float4 projPos)
+            {
+                float2 sp = (projPos.xy / projPos.w) * 2.0 - 1.0;
+
+                // Following code is equivalent to: sp.x *= _ScreenParams.x / _ScreenParams.y;
+                sp.x *= _ScreenParams.x * _ScreenParams.w - _ScreenParams.x;
+
+                return UNITY_MATRIX_V[0].xyz * sp.x
+                    + UNITY_MATRIX_V[1].xyz * sp.y
+                    + -UNITY_MATRIX_V[2].xyz * abs(UNITY_MATRIX_P[1][1]);
+            }
+            ENDCG
+        }
+    }
+
+    // CustomEditor "#SCRIPTNAME#GUI"
+}
