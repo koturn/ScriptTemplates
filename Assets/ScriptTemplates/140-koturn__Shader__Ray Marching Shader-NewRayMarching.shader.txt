@@ -22,6 +22,9 @@ Shader "Custom/#SCRIPTNAME#"
 
         _Scales ("Scale vector", Vector) = (1.0, 1.0, 1.0, 1.0)
 
+        [KeywordEnum(Object, World)]
+        _CalcSpace ("Calculation space", Int) = 0
+
 
         // ------------------------------------------------------------
         [Header(SDF Parameters)]
@@ -168,6 +171,7 @@ Shader "Custom/#SCRIPTNAME#"
         CGINCLUDE
         #pragma target 3.0
 
+        #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
         #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
@@ -258,10 +262,10 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Clip space position of the vertex.
             float4 pos : SV_POSITION;
-            //! Ray origin in object space (Local space position of the camera).
-            nointerpolation float3 localRayOrigin : TEXCOORD0;
-            //! Unnormalized ray direction in object space.
-            float3 localRayDirVector : TEXCOORD1;
+            //! Ray origin in object/world space
+            nointerpolation float3 rayOrigin : TEXCOORD0;
+            //! Unnormalized ray direction in object/world space.
+            float3 rayDirVec : TEXCOORD1;
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
             UNITY_LIGHTING_COORDS(2, 3)
         #if defined(LIGHTMAP_ON)
@@ -334,8 +338,13 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_TRANSFER_INSTANCE_ID(v, o);
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
-            o.localRayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz * _Scales;
-            o.localRayDirVector = v.vertex - o.localRayOrigin;
+        #ifdef _CALCSPACE_WORLD
+            o.rayOrigin = _WorldSpaceCameraPos / _Scales;
+            o.rayDirVec = mul(unity_ObjectToWorld, v.vertex).xyz - o.rayOrigin;
+        #else
+            o.rayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz / _Scales;
+            o.rayDirVec = v.vertex - o.rayOrigin;
+        #endif  // defined(_CALCSPACE_WORLD)
 
             // Static lightmaps
             #if defined(LIGHTMAP_ON)
@@ -363,15 +372,22 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
-            const float3 localRayDir = normalize(fi.localRayDirVector);
+            const float3 rayOrigin = fi.rayOrigin;
+            const float3 rayDir = normalize(fi.rayDirVec);
 
-            const rmout ro = rayMarch(fi.localRayOrigin, localRayDir);
+            const rmout ro = rayMarch(rayOrigin, rayDir);
             if (!ro.isHit) {
                 discard;
             }
 
-            const float3 localFinalPos = fi.localRayOrigin + localRayDir * ro.rayLength;
+        #ifdef _CALCSPACE_WORLD
+            const float3 worldFinalPos = rayOrigin + rayDir * ro.rayLength;
+            const float3 worldNormal = calcNormal(worldFinalPos);
+        #else
+            const float3 localFinalPos = rayOrigin + rayDir * ro.rayLength;
             const float3 worldFinalPos = mul(unity_ObjectToWorld, float4(localFinalPos, 1.0)).xyz;
+            const float3 worldNormal = UnityObjectToWorldNormal(calcNormal(localFinalPos));
+        #endif  // defined(_CALCSPACE_WORLD)
 
         #if defined(LIGHTMAP_ON)
         #    ifdef DYNAMICLIGHTMAP_ON
@@ -390,7 +406,7 @@ Shader "Custom/#SCRIPTNAME#"
             half4 color = calcLighting(
                 _Color,
                 worldFinalPos,
-                UnityObjectToWorldNormal(calcNormal(localFinalPos)),
+                worldNormal,
                 atten,
                 lmap,
                 half3(0.0, 0.0, 0.0));
@@ -888,10 +904,10 @@ Shader "Custom/#SCRIPTNAME#"
             {
                 //! Shadow caster members.
                 V2F_SHADOW_CASTER;
-                //! Ray origin in object space.
-                float3 localRayOrigin : TEXCOORD1;
-                //! Unnormalized ray direction in object space.
-                float3 localRayDirVector : TEXCOORD2;
+                //! Ray origin in object/world space
+                float3 rayOrigin : TEXCOORD1;
+                //! Unnormalized ray direction in object/world space.
+                float3 rayDirVec : TEXCOORD2;
                 //! instanceID for single pass instanced rendering.
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 //! stereoTargetEyeIndex for single pass instanced rendering.
@@ -899,7 +915,7 @@ Shader "Custom/#SCRIPTNAME#"
             };
 
 
-            float3 getCameraDirectionVector(float4 projPos);
+            float3 getCameraDirVec(float4 projPos);
 
 
             /*!
@@ -919,17 +935,44 @@ Shader "Custom/#SCRIPTNAME#"
 
                 TRANSFER_SHADOW_CASTER(o)
 
-                o.localRayOrigin = v.vertex.xyz;
-
                 float4 projPos = ComputeNonStereoScreenPos(o.pos);
                 COMPUTE_EYEDEPTH(projPos.z);
-            #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
-                o.localRayDirVector = mul((float3x3)unity_WorldToObject, getCameraDirectionVector(projPos));
+
+            #ifdef _CALCSPACE_WORLD
+                o.rayOrigin = mul(unity_ObjectToWorld, v.vertex).xyz;
+            #    if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                o.rayDirVec = getCameraDirVec(projPos);
+            #    else
+                // o.rayDirVec = UNITY_MATRIX_P[3][3] == 1.0 ? -UNITY_MATRIX_V[2].xyz
+                //     : abs(unity_LightShadowBias.x) < 1.0e-5 ? (o.rayOrigin - _WorldSpaceCameraPos.xyz)
+                //     : getCameraDirVec(projPos);
+                UNITY_BRANCH
+                if (UNITY_MATRIX_P[3][3] == 1.0) {
+                    o.rayDirVec = -UNITY_MATRIX_V[2].xyz;
+                } else UNITY_BRANCH if (abs(unity_LightShadowBias.x) < 1.0e-5) {
+                    o.rayDirVec = (o.rayOrigin - _WorldSpaceCameraPos.xyz);
+                } else {
+                    o.rayDirVec = getCameraDirVec(projPos);
+                }
+            #    endif
             #else
-                o.localRayDirVector = UNITY_MATRIX_P[3][3] == 1.0 ? mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz)
-                    : abs(unity_LightShadowBias.x) < 1.0e-5 ? (v.vertex.xyz - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz)
-                    : mul((float3x3)unity_WorldToObject, getCameraDirectionVector(projPos));
-            #endif
+                o.rayOrigin = v.vertex.xyz;
+            #    if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(projPos));
+            #    else
+                // o.rayDirVec = UNITY_MATRIX_P[3][3] == 1.0 ? mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz)
+                //     : abs(unity_LightShadowBias.x) < 1.0e-5 ? (o.rayOrigin - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz)
+                //     : mul((float3x3)unity_WorldToObject, getCameraDirVec(projPos));
+                UNITY_BRANCH
+                if (UNITY_MATRIX_P[3][3] == 1.0) {
+                    o.rayDirVec = mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz);
+                } else UNITY_BRANCH if (abs(unity_LightShadowBias.x) < 1.0e-5) {
+                    o.rayDirVec = o.rayOrigin - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
+                } else {
+                    o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(projPos));
+                }
+            #    endif
+            #endif  // defined(_CALCSPACE_WORLD)
 
                 return o;
             }
@@ -944,15 +987,20 @@ Shader "Custom/#SCRIPTNAME#"
                 UNITY_SETUP_INSTANCE_ID(fi);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
-                const float3 localRayDir = normalize(fi.localRayDirVector);
+                const float3 rayOrigin = fi.rayOrigin;
+                const float3 rayDir = normalize(fi.rayDirVec);
 
-                const rmout ro = rayMarch(fi.localRayOrigin, localRayDir);
+                const rmout ro = rayMarch(rayOrigin, rayDir);
                 if (!ro.isHit) {
                     discard;
                 }
 
-                const float3 localFinalPos = fi.localRayOrigin + localRayDir * ro.rayLength;
+            #ifdef _CALCSPACE_WORLD
+                const float3 worldFinalPos = rayOrigin + rayDir * ro.rayLength;
+            #else
+                const float3 localFinalPos = rayOrigin + rayDir * ro.rayLength;
                 const float3 worldFinalPos = mul(unity_ObjectToWorld, float4(localFinalPos, 1.0)).xyz;
+            #endif  // defined(_CALCSPACE_WORLD)
 
             #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
                 fi.vec = worldFinalPos - _LightPositionRange.xyz;
@@ -970,7 +1018,7 @@ Shader "Custom/#SCRIPTNAME#"
              * @param [in] Projected position.
              * @return Camera direction in world space.
              */
-            float3 getCameraDirectionVector(float4 projPos)
+            float3 getCameraDirVec(float4 projPos)
             {
                 float2 sp = (projPos.xy / projPos.w) * 2.0 - 1.0;
 
