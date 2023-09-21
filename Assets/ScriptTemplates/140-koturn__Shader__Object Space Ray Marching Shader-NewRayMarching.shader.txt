@@ -793,41 +793,15 @@ Shader "Custom/#SCRIPTNAME#"
 
             #if defined(_NOFORWARDADD_ON) || defined(_LIGHTING_UNLIT)
             /*!
-             * @brief Input data type for vertex shader function, vertForwardAdd().
-             * @see vertForwardAdd
-             */
-            struct appdata_forwardadd
-            {
-                //! Object space position of the vertex.
-                float4 vertex : POSITION;
-            };
-
-            /*!
-             * @brief Output of the vertex shader, vertForwardAdd()
-             * and input of fragment shader, fragForwardAdd().
-             * @see vertForwardAdd
-             * @see fragForwardAdd
-             */
-            struct v2f_forwardadd
-            {
-                //! Clip space position of the vertex.
-                float4 pos : SV_POSITION;
-            };
-
-            /*!
              * @brief Vertex shader function for ForwardAdd pass.
              *
              * This function outputs NaN vertice to skip fragment shader.
              *
-             * @param [in] v  Input data.
-             * @return Interpolation source data for fragment shader function, fragForwardAdd().
-             * @see fragForwardAdd
+             * @return NaN vertex.
              */
-            v2f vertForwardAdd(appdata_forwardadd v)
+            float4 vertForwardAdd() : SV_POSITION
             {
-                v2f o;
-                o.pos = asfloat(0x7fc00000).xxxx;  // qNaN
-                return o;
+                return asfloat(0x7fc00000).xxxx;  // qNaN
             }
 
             /*!
@@ -836,10 +810,9 @@ Shader "Custom/#SCRIPTNAME#"
              * This function will not be execute because vertForwardAdd outputs NaN vertices,
              * and the vertices will be removed by view frustum culling.
              *
-             * @param [in] fi  Input data from vertex shader.
              * @return (0.0, 0.0, 0.0, 0.0).
              */
-            half4 fragForwardAdd(v2f_forwardadd fi) : SV_Target
+            half4 fragForwardAdd() : SV_Target
             {
                 return half4(0.0, 0.0, 0.0, 0.0);
             }
