@@ -57,7 +57,7 @@ Shader "Custom/NewSurfaceBlinnPhong"
         _ZClip ("ZClip", Int) = 1  // Default: True
 
         [Enum(2D, 0, 3D, 1)]
-        _OffsetFact ("Offset Factor", Int) = 0
+        _OffsetFactor ("Offset Factor", Int) = 0
 
         _OffsetUnit ("Offset Units", Range(-100, 100)) = 0
 
@@ -118,7 +118,7 @@ Shader "Custom/NewSurfaceBlinnPhong"
         ZWrite [_ZWrite]
         ZTest [_ZTest]
         ZClip [_ZClip]
-        Offset [_OffsetFact], [_OffsetUnit]
+        Offset [_OffsetFactor], [_OffsetUnit]
         ColorMask [_ColorMask]
         AlphaToMask [_AlphaToMask]
 
