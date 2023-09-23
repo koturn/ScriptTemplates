@@ -36,6 +36,9 @@ Shader "Custom/#SCRIPTNAME#"
         [Enum(UnityEngine.Rendering.CullMode)]
         _Cull ("Culling Mode", Int) = 2  // Default: Back
 
+        [Toggle(_FLIPNORMAL_ON)]
+        _FlipNormal ("Flip Backface Normal", Int) = 1
+
         // [HideInInspector]
         // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
         // _Mode ("Rendering Mode", Int) = 0
@@ -153,9 +156,13 @@ Shader "Custom/#SCRIPTNAME#"
         #pragma only_renderers d3d9 d3d11 d3d11_9x glcore gles gles3 metal vulkan xboxone ps4 n3ds wiiu switch
         #pragma fragmentoption ARB_precision_hint_fastest
 
+        #pragma shader_feature_local_fragment _ _FLIPNORMAL_ON
         #pragma shader_feature_local_fragment _ _ALPHATEST_ON
         #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
+        #ifdef SHADER_API_D3D11_9X
+        #    undef _FLIPNORMAL_ON
+        #endif  // defined(SHADER_API_D3D11_9X)
         #define OPTIMIZE_BOX_PROJECTION 1
 
         #include "UnityCG.cginc"
@@ -269,11 +276,22 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_VERTEX_OUTPUT_STEREO
         };
 
+
+        #if defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+        typedef fixed face_t;
+        #    define FACE_SEMANTICS VFACE
+        #else
+        typedef bool face_t;
+        #    define FACE_SEMANTICS SV_IsFrontFace
+        #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+
+
         half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         UnityGI getGI(float3 worldPos, half atten);
         UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient);
+        bool isFacing(face_t face);
 
 
         /*!
@@ -328,15 +346,29 @@ Shader "Custom/#SCRIPTNAME#"
             return o;
         }
 
+        #ifdef _FLIPNORMAL_ON
+        /*!
+         * @brief Fragment shader function.
+         * @param [in] fi  Input data from vertex shader.
+         * @param [in] facing  Facing parameter.
+         * @return Color of texel.
+         */
+        half4 frag(v2f fi, face_t facing : FACE_SEMANTICS) : SV_Target
+        #else
         /*!
          * @brief Fragment shader function.
          * @param [in] fi  Input data from vertex shader.
          * @return Color of texel.
          */
         half4 frag(v2f fi) : SV_Target
+        #endif  // defined(_FLIPNORMAL_ON)
         {
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+        #ifdef _FLIPNORMAL_ON
+            fi.normal = isFacing(facing) ? fi.normal : -fi.normal;
+        #endif  // defined(_FLIPNORMAL_ON)
 
             const float4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, fi.uv) * _Color;
         #if _ALPHATEST_ON
@@ -592,6 +624,20 @@ Shader "Custom/#SCRIPTNAME#"
         }
 
         /*!
+         * @brief Identify whether surface is facing the camera or facing away from the camera.
+         * @param [in] facing  Facing variable (fixed or bool).
+         * @return True if surface facing the camera, otherwise false.
+         */
+        bool isFacing(face_t facing)
+        {
+        #if defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+            return facing >= 0.0;
+        #else
+            return facing;
+        #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+        }
+
+        /*!
          * @brief Obtain reflection direction considering box projection.
          *
          * This function is more efficient than BoxProjectedCubemapDirection() in UnityStandardUtils.cginc.
@@ -705,15 +751,28 @@ Shader "Custom/#SCRIPTNAME#"
                 return vert(v);
             }
 
+            #    ifdef _FLIPNORMAL_ON
             /*!
-             * @brief Fragment shader function.
-             * @param [in] fi  Input data from vertex shader.
-             * @return Color of texel.
-             */
+            * @brief Fragment shader function.
+            * @param [in] fi  Input data from vertex shader.
+            * @param [in] facing  Facing parameter.
+            * @return Color of texel.
+            */
+            half4 fragForwardAdd(v2f fi, face_t facing : FACE_SEMANTICS) : SV_Target
+            {
+                return frag(fi, facing);
+            }
+            #    else
+            /*!
+            * @brief Fragment shader function.
+            * @param [in] fi  Input data from vertex shader.
+            * @return Color of texel.
+            */
             half4 fragForwardAdd(v2f fi) : SV_Target
             {
                 return frag(fi);
             }
+            #    endif  // defined(_FLIPNORMAL_ON)
             #endif  // defined(_NOFORWARDADD_ON) || defined(_LIGHTING_UNLIT)
             ENDCG
         }
