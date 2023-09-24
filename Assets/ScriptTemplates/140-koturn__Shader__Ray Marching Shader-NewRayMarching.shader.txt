@@ -362,7 +362,7 @@ Shader "Custom/#SCRIPTNAME#"
 
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
-            v.vertex.xyz /= _Scales;
+            v.vertex.xyz *= _Scales;
             o.pos = UnityObjectToClipPos(v.vertex);
 
             return o;
@@ -469,7 +469,7 @@ Shader "Custom/#SCRIPTNAME#"
         float map(float3 p)
         {
         #ifdef UNITY_PASS_SHADOWCASTER
-            p *= _Scales;
+            p /= _Scales;
         #endif  // UNITY_PASS_SHADOWCASTER
 
             //
