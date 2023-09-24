@@ -366,11 +366,11 @@ Shader "Custom/#SCRIPTNAME#"
 
         #ifdef _CALCSPACE_WORLD
             const float3 vertPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-            o.rayOrigin = _WorldSpaceCameraPos / _Scales;
+            o.rayOrigin = _WorldSpaceCameraPos;
             o.rayDirVec = vertPos - o.rayOrigin;
         #else
             const float3 vertPos = v.vertex.xyz;
-            o.rayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz / _Scales;
+            o.rayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
             o.rayDirVec = vertPos - o.rayOrigin;
         #endif  // defined(_CALCSPACE_WORLD)
         #ifdef _ASSUMEINSIDE_ON
@@ -387,14 +387,6 @@ Shader "Custom/#SCRIPTNAME#"
 
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
-            v.vertex.xyz *= _Scales;
-        // #ifdef _ASSUMEINSIDE_ON
-        // #    ifdef _CALCSPACE_WORLD
-        //     o.fragPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-        // #    else
-        //     o.fragPos = v.vertex.xyz;
-        // #    endif
-        // #endif  // defined(_ASSUMEINSIDE_ON)
             o.pos = UnityObjectToClipPos(v.vertex);
 
             return o;
@@ -495,6 +487,9 @@ Shader "Custom/#SCRIPTNAME#"
         #elif defined(UNITY_PASS_SHADOWCASTER)
             const int maxLoop = _MaxLoopShadowCaster;
         #endif  // defined(UNITY_PASS_FORWARDBASE)
+            const float3 rcpScales = rcp(_Scales);
+            const float3 rayDirVec = rayDir * rcpScales;
+            const float marchingFactor = _MarchingFactor * rsqrt(dot(rayDirVec, rayDirVec));
 
             rmout ro;
             ro.rayLength = 0.0;
@@ -502,8 +497,8 @@ Shader "Custom/#SCRIPTNAME#"
 
             // Loop of Ray Marching.
             for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > maxRayLength) ? 0x7fffffff : i + 1) {
-                const float d = map(rayOrigin + rayDir * ro.rayLength);
-                ro.rayLength += d * _MarchingFactor;
+                const float d = map((rayOrigin + rayDir * ro.rayLength) * rcpScales);
+                ro.rayLength += d * marchingFactor;
                 ro.isHit = d < _MinRayLength;
             }
 
@@ -517,10 +512,6 @@ Shader "Custom/#SCRIPTNAME#"
          */
         float map(float3 p)
         {
-        #ifdef UNITY_PASS_SHADOWCASTER
-            p /= _Scales;
-        #endif  // UNITY_PASS_SHADOWCASTER
-
             //
             // TODO: Render scene.
             //
@@ -550,10 +541,11 @@ Shader "Custom/#SCRIPTNAME#"
             static const float3 ks[] = {k.xyy, k.yxy, k.yyx, k.xxx};
             static const float h = 0.0001;
 
+            const float3 rcpScales = rcp(_Scales);
             float3 normal = float3(0.0, 0.0, 0.0);
 
             for (int i = 0; i < 4; i++) {
-                normal += ks[i] * map(p + ks[i] * h);
+                normal += ks[i] * map((p + ks[i] * h) * rcpScales);
             }
 
             return normalize(normal);
