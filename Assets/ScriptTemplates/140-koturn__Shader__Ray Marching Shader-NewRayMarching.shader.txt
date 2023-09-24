@@ -25,6 +25,9 @@ Shader "Custom/#SCRIPTNAME#"
         [KeywordEnum(Object, World)]
         _CalcSpace ("Calculation space", Int) = 0
 
+        [Toggle(_NODEPTH_ON)]
+        _NoDepth ("Disable SV_Depth ouput", Int) = 0
+
 
         // ------------------------------------------------------------
         [Header(SDF Parameters)]
@@ -171,6 +174,7 @@ Shader "Custom/#SCRIPTNAME#"
         CGINCLUDE
         #pragma target 3.0
 
+        #pragma shader_feature_local _ _NODEPTH_ON
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
         #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
@@ -294,8 +298,10 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Output color of the pixel.
             half4 color : SV_Target;
+        #ifndef _NODEPTH_ON
             //! Depth of the pixel.
             float depth : SV_Depth;
+        #endif  // !defined(_NODEPTH_ON)
         };
 
         /*!
@@ -417,7 +423,10 @@ Shader "Custom/#SCRIPTNAME#"
 
             fout fo;
             fo.color = color;
+        #ifndef _NODEPTH_ON
+            //! Depth of the pixel.
             fo.depth = getDepth(projPos);
+        #endif  // !defined(_NODEPTH_ON)
 
             return fo;
         }
@@ -1006,8 +1015,13 @@ Shader "Custom/#SCRIPTNAME#"
                 fi.vec = worldFinalPos - _LightPositionRange.xyz;
                 SHADOW_CASTER_FRAGMENT(fi);
             #else
+                const float depth = getDepth(UnityWorldToClipPos(worldFinalPos));
+
                 fout fo;
-                fo.color = fo.depth = getDepth(UnityWorldToClipPos(worldFinalPos));
+                fo.color = depth.xxxx;
+            #    ifndef _NODEPTH_ON
+                fo.depth = depth;
+            #    endif  // !defined(_NODEPTH_ON)
                 return fo;
             #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
             }
