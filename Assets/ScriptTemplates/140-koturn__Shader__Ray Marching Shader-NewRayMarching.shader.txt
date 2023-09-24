@@ -28,6 +28,9 @@ Shader "Custom/#SCRIPTNAME#"
         [Toggle(_NODEPTH_ON)]
         _NoDepth ("Disable SV_Depth ouput", Int) = 0
 
+        [Toggle(_ASSUMEINSIDE_ON)]
+        _AssumeInside ("Assume render target is inside object", Int) = 0
+
 
         // ------------------------------------------------------------
         [Header(SDF Parameters)]
@@ -177,6 +180,7 @@ Shader "Custom/#SCRIPTNAME#"
         #pragma target 3.0
 
         #pragma shader_feature_local _ _NODEPTH_ON
+        #pragma shader_feature_local _ _ASSUMEINSIDE_ON
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
         #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
@@ -272,19 +276,23 @@ Shader "Custom/#SCRIPTNAME#"
             nointerpolation float3 rayOrigin : TEXCOORD0;
             //! Unnormalized ray direction in object/world space.
             float3 rayDirVec : TEXCOORD1;
+        #ifdef _ASSUMEINSIDE_ON
+            //! Object/World space position of the fragment.
+            float3 fragPos : TEXCOORD2;
+        #endif  // defined(_ASSUMEINSIDE_ON)
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
-            UNITY_LIGHTING_COORDS(2, 3)
+            UNITY_LIGHTING_COORDS(3, 4)
         #if defined(LIGHTMAP_ON)
         #    ifdef DYNAMICLIGHTMAP_ON
             //! Lightmap and Dynamic Lightmap coordinate.
-            float4 lmap: TEXCOORD4;
+            float4 lmap: TEXCOORD5;
         #    else
             //! Lightmap coordinate.
-            float2 lmap: TEXCOORD4;
+            float2 lmap: TEXCOORD5;
         #    endif
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             //! Ambient light color.
-            half3 ambient: TEXCOORD4;
+            half3 ambient: TEXCOORD5;
         #endif  // UNITY_SHOULD_SAMPLE_SH
             //! Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -319,7 +327,16 @@ Shader "Custom/#SCRIPTNAME#"
         };
 
 
-        rmout rayMarch(float3 rayOrigin, float3 rayDir);
+        #if defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+        typedef fixed face_t;
+        #    define FACE_SEMANTICS VFACE
+        #else
+        typedef bool face_t;
+        #    define FACE_SEMANTICS SV_IsFrontFace
+        #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+
+
+        rmout rayMarch(float3 rayOrigin, float3 rayDir, float maxRayLength);
         float map(float3 p);
         float sdSphere(float3 p, float r);
         float3 calcNormal(float3 p);
@@ -329,6 +346,7 @@ Shader "Custom/#SCRIPTNAME#"
         half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         UnityGI getGI(float3 worldPos, half atten);
         UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient);
+        bool isFacing(face_t facing);
 
 
         /*!
@@ -347,12 +365,17 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
         #ifdef _CALCSPACE_WORLD
+            const float3 vertPos = mul(unity_ObjectToWorld, v.vertex).xyz;
             o.rayOrigin = _WorldSpaceCameraPos / _Scales;
-            o.rayDirVec = mul(unity_ObjectToWorld, v.vertex).xyz - o.rayOrigin;
+            o.rayDirVec = vertPos - o.rayOrigin;
         #else
+            const float3 vertPos = v.vertex.xyz;
             o.rayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz / _Scales;
-            o.rayDirVec = v.vertex - o.rayOrigin;
+            o.rayDirVec = vertPos - o.rayOrigin;
         #endif  // defined(_CALCSPACE_WORLD)
+        #ifdef _ASSUMEINSIDE_ON
+            o.fragPos = vertPos;
+        #endif  // defined(_ASSUMEINSIDE_ON)
 
             // Static lightmaps
             #if defined(LIGHTMAP_ON)
@@ -365,25 +388,48 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
             v.vertex.xyz *= _Scales;
+        // #ifdef _ASSUMEINSIDE_ON
+        // #    ifdef _CALCSPACE_WORLD
+        //     o.fragPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+        // #    else
+        //     o.fragPos = v.vertex.xyz;
+        // #    endif
+        // #endif  // defined(_ASSUMEINSIDE_ON)
             o.pos = UnityObjectToClipPos(v.vertex);
 
             return o;
         }
 
+        #ifdef _ASSUMEINSIDE_ON
+        /*!
+         * @brief Fragment shader function.
+         * @param [in] fi  Input data from vertex shader.
+         * @param [in] facing  Facing parameter.
+         * @return Color of texel.
+         */
+        fout frag(v2f fi, face_t facing : FACE_SEMANTICS)
+        #else
         /*!
          * @brief Fragment shader function.
          * @param [in] fi  Input data from vertex shader.
          * @return Color of texel.
          */
         fout frag(v2f fi)
+        #endif  // defined(_ASSUMEINSIDE_ON)
         {
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
+        #ifdef _ASSUMEINSIDE_ON
+            const float maxRayLength = isFacing(facing) ? _MaxRayLength : length(fi.rayDirVec);
+            const float3 rayOrigin = isFacing(facing) ? fi.fragPos : fi.rayOrigin;
+        #else
+            const float maxRayLength = _MaxRayLength;
             const float3 rayOrigin = fi.rayOrigin;
+        #endif  // defined(_ASSUMEINSIDE_ON)
             const float3 rayDir = normalize(fi.rayDirVec);
 
-            const rmout ro = rayMarch(rayOrigin, rayDir);
+            const rmout ro = rayMarch(rayOrigin, rayDir, maxRayLength);
             if (!ro.isHit) {
                 discard;
             }
@@ -437,9 +483,10 @@ Shader "Custom/#SCRIPTNAME#"
          * @brief Execute ray marching.
          * @param [in] rayOrigin  Origin of the ray.
          * @param [in] rayDir  Direction of the ray.
+         * @param [in] maxRayLength  Maximum length of the ray.
          * @return Result of the ray marching.
          */
-        rmout rayMarch(float3 rayOrigin, float3 rayDir)
+        rmout rayMarch(float3 rayOrigin, float3 rayDir, float maxRayLength)
         {
         #if defined(UNITY_PASS_FORWARDBASE)
             const int maxLoop = _MaxLoop;
@@ -454,7 +501,7 @@ Shader "Custom/#SCRIPTNAME#"
             ro.isHit = false;
 
             // Loop of Ray Marching.
-            for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > _MaxRayLength) ? 0x7fffffff : i + 1) {
+            for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > maxRayLength) ? 0x7fffffff : i + 1) {
                 const float d = map(rayOrigin + rayDir * ro.rayLength);
                 ro.rayLength += d * _MarchingFactor;
                 ro.isHit = d < _MinRayLength;
@@ -773,6 +820,20 @@ Shader "Custom/#SCRIPTNAME#"
             return worldRefDir;
         #endif  // UNITY_SPECCUBE_BOX_PROJECTION
         }
+
+        /*!
+         * @brief Identify whether surface is facing the camera or facing away from the camera.
+         * @param [in] facing  Facing variable (fixed or bool).
+         * @return True if surface facing the camera, otherwise false.
+         */
+        bool isFacing(face_t facing)
+        {
+        #if defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+            return facing >= 0.0;
+        #else
+            return facing;
+        #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+        }
         ENDCG
 
 
@@ -856,6 +917,18 @@ Shader "Custom/#SCRIPTNAME#"
                 return vert(v);
             }
 
+            #    ifdef _ASSUMEINSIDE_ON
+            /*!
+             * @brief Fragment shader function.
+             * @param [in] fi  Input data from vertex shader.
+             * @param [in] facing  Facing parameter.
+             * @return Color of texel.
+             */
+            fout fragForwardAdd(v2f fi, face_t facing : FACE_SEMANTICS)
+            {
+                return frag(fi, facing);
+            }
+            #    else
             /*!
              * @brief Fragment shader function.
              * @param [in] fi  Input data from vertex shader.
@@ -865,6 +938,7 @@ Shader "Custom/#SCRIPTNAME#"
             {
                 return frag(fi);
             }
+            #    endif  // defined(_ASSUMEINSIDE_ON)
             #endif  // defined(_NOFORWARDADD_ON) || defined(_LIGHTING_UNLIT)
             ENDCG
         }
@@ -877,7 +951,7 @@ Shader "Custom/#SCRIPTNAME#"
                 "LightMode" = "ShadowCaster"
             }
 
-            Cull Back
+            Cull [_Cull]
             Blend Off
             ZWrite On
 
@@ -991,17 +1065,18 @@ Shader "Custom/#SCRIPTNAME#"
             /*!
              * @brief Fragment shader function for ShadowCaster pass.
              * @param [in] fi  Input data from vertex shader.
+             * @param [in] facing  Facing parameter.
              * @return Color of texel.
              */
-            fout fragShadowCaster(v2f_shadowcaster fi)
+            fout fragShadowCaster(v2f_shadowcaster fi, face_t facing : FACE_SEMANTICS)
             {
                 UNITY_SETUP_INSTANCE_ID(fi);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
                 const float3 rayOrigin = fi.rayOrigin;
-                const float3 rayDir = normalize(fi.rayDirVec);
+                const float3 rayDir = normalize(isFacing(facing) ? fi.rayDirVec : -fi.rayDirVec);
 
-                const rmout ro = rayMarch(rayOrigin, rayDir);
+                const rmout ro = rayMarch(rayOrigin, rayDir, _MaxRayLength);
                 if (!ro.isHit) {
                     discard;
                 }
