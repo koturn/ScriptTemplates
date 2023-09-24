@@ -144,10 +144,12 @@ Shader "Custom/#SCRIPTNAME#"
 
     SubShader
     {
+        // Not set RenderType to avoid phantom shadows when using Scalable Ambient Obscurance.
+        // If you want to set the RenderType, "Transparent" is preferable.
         Tags
         {
-            "RenderType" = "TransparentCutout"
             "Queue" = "AlphaTest"
+            // "RenderType" = "Transparent"
             "DisableBatching" = "True"
             "IgnoreProjector" = "True"
             "VRCFallback" = "Hidden"
