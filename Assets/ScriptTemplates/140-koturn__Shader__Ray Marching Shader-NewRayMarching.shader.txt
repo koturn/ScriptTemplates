@@ -138,12 +138,12 @@ Shader "Custom/#SCRIPTNAME#"
         _StencilZFail ("Stencil ZFail", Int) = 0  // Default: Keep
     }
 
-    // Blend Mode  | RenderQueue   | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
-    // ------------|---------------|---------------------|--------|--------------|-----------------------|----------
-    // Opaque      | "Geometry"    | "Opaque"            | On     | One (1)      | Zero (0)              | x
-    // Cutout      | "AlphaTest"   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
-    // Fade        | "Transparent" | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
-    // Transparent | "Transparent" | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
+    // Rendering Mode  | RenderQueue          | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
+    // ----------------|----------------------|---------------------|--------|--------------|-----------------------|----------
+    // Opaque          | "Geometry" (2000)    | "Opaque"            | On     | One (1)      | Zero (0)              | x
+    // Cutout          | "AlphaTest" (2450)   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
+    // Fade            | "Transparent" (3000) | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
+    // Transparent     | "Transparent" (3000) | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
 
     SubShader
     {
@@ -179,9 +179,9 @@ Shader "Custom/#SCRIPTNAME#"
         CGINCLUDE
         #pragma target 3.0
 
-        #pragma shader_feature_local _ _NODEPTH_ON
-        #pragma shader_feature_local _ _ASSUMEINSIDE_ON
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
+        #pragma shader_feature_local _ _ASSUMEINSIDE_ON
+        #pragma shader_feature_local_fragment _ _NODEPTH_ON
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
         #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
@@ -193,7 +193,7 @@ Shader "Custom/#SCRIPTNAME#"
         #ifdef OPTIMIZE_BOX_PROJECTION
         float3 boxProj(float3 worldRefDir, float3 worldPos, float4 probePos, float4 boxMin, float4 boxMax);
         #    define BoxProjectedCubemapDirection boxProj
-        #endif  // OPTIMIZE_BOX_PROJECTION
+        #endif  // defined(OPTIMIZE_BOX_PROJECTION)
 
         #include "AutoLight.cginc"
         #include "Lighting.cginc"
@@ -220,7 +220,7 @@ Shader "Custom/#SCRIPTNAME#"
         // #ifdef _ALPHATEST_ON
         // //! Alpha Cutoff.
         // uniform float _Cutoff;
-        // #endif  // _ALPHATEST_ON
+        // #endif  // defined(_ALPHATEST_ON)
 
         //! Value of smoothness.
         uniform half _Glossiness;
@@ -230,7 +230,7 @@ Shader "Custom/#SCRIPTNAME#"
         #ifndef UNITY_LIGHTING_COMMON_INCLUDED
         //! Color of light.
         uniform fixed4 _LightColor0;
-        #endif  // UNITY_LIGHTING_COMMON_INCLUDED
+        #endif  // defined(UNITY_LIGHTING_COMMON_INCLUDED)
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
         //! Specular color.
         uniform half4 _SpecColor;
@@ -254,11 +254,11 @@ Shader "Custom/#SCRIPTNAME#"
         #ifdef LIGHTMAP_ON
             //! Lightmap coordinate.
             float4 texcoord1 : TEXCOORD1;
-        #endif  // LIGHTMAP_ON
+        #endif  // defined(LIGHTMAP_ON)
         #ifdef DYNAMICLIGHTMAP_ON
             //! Dynamic Lightmap coordinate.
             float4 texcoord2 : TEXCOORD2;
-        #endif  // DYNAMICLIGHTMAP_ON
+        #endif  // defined(DYNAMICLIGHTMAP_ON)
             UNITY_VERTEX_INPUT_INSTANCE_ID
         };
 
@@ -293,7 +293,7 @@ Shader "Custom/#SCRIPTNAME#"
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             //! Ambient light color.
             half3 ambient: TEXCOORD5;
-        #endif  // UNITY_SHOULD_SAMPLE_SH
+        #endif  // defined(LIGHTMAP_ON)
             //! Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
             //! Stereo target eye index for single pass instanced rendering, stereoTargetEyeIndex.
@@ -397,14 +397,14 @@ Shader "Custom/#SCRIPTNAME#"
          * @brief Fragment shader function.
          * @param [in] fi  Input data from vertex shader.
          * @param [in] facing  Facing parameter.
-         * @return Color of texel.
+         * @return Color and depth of fragment.
          */
         fout frag(v2f fi, face_t facing : FACE_SEMANTICS)
         #else
         /*!
          * @brief Fragment shader function.
          * @param [in] fi  Input data from vertex shader.
-         * @return Color of texel.
+         * @return Color and depth of fragment.
          */
         fout frag(v2f fi)
         #endif  // defined(_ASSUMEINSIDE_ON)
@@ -413,6 +413,10 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
         #ifdef _ASSUMEINSIDE_ON
+            // Facing | Start position of the ray | Max ray length
+            // -------|---------------------------|-----------------------------
+            // Front  | Surface of the mesh       | `_MaxRayLength`
+            // Back   | Camera                    | Distance from camera to mesh
             const float maxRayLength = isFacing(facing) ? _MaxRayLength : length(fi.rayDirVec);
             const float3 rayOrigin = isFacing(facing) ? fi.fragPos : fi.rayOrigin;
         #else
@@ -659,7 +663,7 @@ Shader "Custom/#SCRIPTNAME#"
         #    endif  // !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
             UnityGIInput giInput = getGIInput(gi.light, worldPos, worldNormal, worldViewDir, atten, lmap, ambient);
             LightingUnity_GI(so, giInput, gi);
-        #endif  // UNITY_PASS_FORWARDBASE
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
 
             half4 col = LightingUnity(so, worldViewDir, gi);
             col.rgb += so.Emission;
@@ -687,7 +691,7 @@ Shader "Custom/#SCRIPTNAME#"
             const float3 worldLightDir = UnityWorldSpaceLightDir(worldPos);
         #else
             const float3 worldLightDir = normalize(UnityWorldSpaceLightDir(worldPos));
-        #endif  // defined(USING_LIGHT_MULTI_COMPILE) || defined(USING_DIRECTIONAL_LIGHT)
+        #endif  // defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
             const fixed3 lightCol = _LightColor0.rgb * atten;
 
             // Lambertian reflectance.
@@ -701,7 +705,7 @@ Shader "Custom/#SCRIPTNAME#"
             // Ambient color.
         #if UNITY_SHOULD_SAMPLE_SH
             ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
-        #endif  // !UNITY_SHOULD_SAMPLE_SH
+        #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
 
             const half4 outColor = half4((diffuse + ambient) * color.rgb + specular, color.a);
 
@@ -722,12 +726,12 @@ Shader "Custom/#SCRIPTNAME#"
             gi.light.color = _LightColor0.rgb;
         #else
             gi.light.color = _LightColor0.rgb * atten;
-        #endif  // UNITY_PASS_FORWARDBASE
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
         #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
             gi.light.dir = UnityWorldSpaceLightDir(worldPos);
         #else
             gi.light.dir = normalize(UnityWorldSpaceLightDir(worldPos));
-        #endif  // defined(USING_LIGHT_MULTI_COMPILE) || defined(USING_DIRECTIONAL_LIGHT)
+        #endif  // defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
             // gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
             // gi.indirect.specular = half3(0.0, 0.0, 0.0);
 
@@ -764,7 +768,7 @@ Shader "Custom/#SCRIPTNAME#"
             giInput.ambient = ambient;
         #else
             giInput.ambient = half3(0.0, 0.0, 0.0);
-        #endif  // UNITY_SHOULD_SAMPLE_SH
+        #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
 
         #if !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
             giInput.probeHDR[0] = unity_SpecCube0_HDR;
@@ -810,7 +814,7 @@ Shader "Custom/#SCRIPTNAME#"
             }
         #else
             return worldRefDir;
-        #endif  // UNITY_SPECCUBE_BOX_PROJECTION
+        #endif  // defined(UNITY_SPECCUBE_BOX_PROJECTION)
         }
 
         /*!
@@ -914,7 +918,7 @@ Shader "Custom/#SCRIPTNAME#"
              * @brief Fragment shader function.
              * @param [in] fi  Input data from vertex shader.
              * @param [in] facing  Facing parameter.
-             * @return Color of texel.
+             * @return Color and depth of fragment.
              */
             fout fragForwardAdd(v2f fi, face_t facing : FACE_SEMANTICS)
             {
@@ -924,7 +928,7 @@ Shader "Custom/#SCRIPTNAME#"
             /*!
              * @brief Fragment shader function.
              * @param [in] fi  Input data from vertex shader.
-             * @return Color of texel.
+             * @return Color and depth of fragment.
              */
             fout fragForwardAdd(v2f fi)
             {
@@ -966,7 +970,7 @@ Shader "Custom/#SCRIPTNAME#"
             #if !defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)
                 //! Normal vector of the vertex.
                 float3 normal : NORMAL;
-            #endif
+            #endif  // !defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)
                 //! instanceID for single pass instanced rendering.
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
@@ -1059,10 +1063,16 @@ Shader "Custom/#SCRIPTNAME#"
              * @brief Fragment shader function for ShadowCaster pass.
              * @param [in] fi  Input data from vertex shader.
              * @param [in] facing  Facing parameter.
-             * @return Color of texel.
+             * @return Depth of fragment.
              */
             float4 fragShadowCaster(v2f_shadowcaster fi, face_t facing : FACE_SEMANTICS) : SV_Target
             #else
+            /*!
+             * @brief Fragment shader function for ShadowCaster pass.
+             * @param [in] fi  Input data from vertex shader.
+             * @param [in] facing  Facing parameter.
+             * @return Depth of fragment.
+             */
             fout fragShadowCaster(v2f_shadowcaster fi, face_t facing : FACE_SEMANTICS)
             #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
             {
