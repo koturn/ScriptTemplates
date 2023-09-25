@@ -1054,13 +1054,17 @@ Shader "Custom/#SCRIPTNAME#"
                 return o;
             }
 
+            #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
             /*!
              * @brief Fragment shader function for ShadowCaster pass.
              * @param [in] fi  Input data from vertex shader.
              * @param [in] facing  Facing parameter.
              * @return Color of texel.
              */
+            float4 fragShadowCaster(v2f_shadowcaster fi, face_t facing : FACE_SEMANTICS) : SV_Target
+            #else
             fout fragShadowCaster(v2f_shadowcaster fi, face_t facing : FACE_SEMANTICS)
+            #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
             {
                 UNITY_SETUP_INSTANCE_ID(fi);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
