@@ -272,10 +272,12 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Clip space position of the vertex.
             float4 pos : SV_POSITION;
-            //! Ray origin in object/world space
-            nointerpolation float3 rayOrigin : TEXCOORD0;
             //! Unnormalized ray direction in object/world space.
-            float3 rayDirVec : TEXCOORD1;
+            float3 rayDirVec : TEXCOORD0;
+        #ifndef _CALCSPACE_WORLD
+            //! Camera position in object space. (for pre-calulation on vertex shader)
+            nointerpolation float3 cameraPos : TEXCOORD1;
+        #endif  // !defined(_CALCSPACE_WORLD)
         #ifdef _ASSUMEINSIDE_ON
             //! Object/World space position of the fragment.
             float3 fragPos : TEXCOORD2;
@@ -361,12 +363,12 @@ Shader "Custom/#SCRIPTNAME#"
 
         #ifdef _CALCSPACE_WORLD
             const float3 vertPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-            o.rayOrigin = _WorldSpaceCameraPos;
+            o.rayDirVec = vertPos - _WorldSpaceCameraPos;
         #else
             const float3 vertPos = v.vertex.xyz;
-            o.rayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
+            o.cameraPos = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
+            o.rayDirVec = vertPos - o.cameraPos;
         #endif  // defined(_CALCSPACE_WORLD)
-            o.rayDirVec = vertPos - o.rayOrigin;
 
         #ifdef _ASSUMEINSIDE_ON
             o.fragPos = vertPos;
@@ -406,16 +408,22 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
+        #ifdef _CALCSPACE_WORLD
+            const float3 cameraPos = _WorldSpaceCameraPos;
+        #else
+            const float3 cameraPos = fi.cameraPos;
+        #endif  // defined(_CALCSPACE_WORLD)
+
         #ifdef _ASSUMEINSIDE_ON
             // Facing | Start position of the ray | Max ray length
             // -------|---------------------------|-----------------------------
             // Front  | Surface of the mesh       | `_MaxRayLength`
             // Back   | Camera                    | Distance from camera to mesh
             const float maxRayLength = isFacing(facing) ? _MaxRayLength : length(fi.rayDirVec);
-            const float3 rayOrigin = isFacing(facing) ? fi.fragPos : fi.rayOrigin;
+            const float3 rayOrigin = isFacing(facing) ? fi.fragPos : cameraPos;
         #else
             const float maxRayLength = _MaxRayLength;
-            const float3 rayOrigin = fi.rayOrigin;
+            const float3 rayOrigin = cameraPos;
         #endif  // defined(_ASSUMEINSIDE_ON)
             const float3 rayDir = normalize(fi.rayDirVec);
 
