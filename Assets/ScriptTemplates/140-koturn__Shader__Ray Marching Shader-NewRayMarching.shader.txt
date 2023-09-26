@@ -184,7 +184,6 @@ Shader "Custom/#SCRIPTNAME#"
         #pragma shader_feature_local _ _ASSUMEINSIDE_ON
         #pragma shader_feature_local_fragment _ _NODEPTH_ON
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
-        #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
         #define OPTIMIZE_BOX_PROJECTION 1
 
@@ -848,6 +847,7 @@ Shader "Custom/#SCRIPTNAME#"
             CGPROGRAM
             #pragma multi_compile_fwdbase
             #pragma multi_compile_fog
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
             #pragma vertex vert
             #pragma fragment frag
@@ -870,6 +870,7 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma multi_compile_fwdadd_fullshadow
             #pragma multi_compile_fog
             #pragma shader_feature_local _ _NOFORWARDADD_ON
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
             #pragma vertex vertForwardAdd
             #pragma fragment fragForwardAdd
@@ -951,7 +952,6 @@ Shader "Custom/#SCRIPTNAME#"
 
             CGPROGRAM
             #pragma multi_compile_shadowcaster
-            #pragma multi_compile_fog
 
             #pragma vertex vertShadowCaster
             #pragma fragment fragShadowCaster
