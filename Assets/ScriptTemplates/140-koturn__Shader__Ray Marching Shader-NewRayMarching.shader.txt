@@ -863,7 +863,7 @@ Shader "Custom/#SCRIPTNAME#"
             }
 
             Cull [_Cull]
-            Blend One One
+            Blend [_SrcBlend] One
             ZWrite Off
 
             CGPROGRAM
