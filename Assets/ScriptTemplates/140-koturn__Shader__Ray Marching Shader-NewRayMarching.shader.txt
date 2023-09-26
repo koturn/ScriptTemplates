@@ -282,14 +282,9 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_ASSUMEINSIDE_ON)
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
             UNITY_LIGHTING_COORDS(3, 4)
-        #if defined(LIGHTMAP_ON)
-        #    ifdef DYNAMICLIGHTMAP_ON
+        #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
             //! Lightmap and Dynamic Lightmap coordinate.
             float4 lmap: TEXCOORD5;
-        #    else
-            //! Lightmap coordinate.
-            float2 lmap: TEXCOORD5;
-        #    endif
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             //! Ambient light color.
             half3 ambient: TEXCOORD5;
@@ -377,13 +372,12 @@ Shader "Custom/#SCRIPTNAME#"
             o.fragPos = vertPos;
         #endif  // defined(_ASSUMEINSIDE_ON)
 
-            // Static lightmaps
-        #if defined(LIGHTMAP_ON)
+        #ifdef LIGHTMAP_ON
             o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
-        #    ifdef DYNAMICLIGHTMAP_ON
+        #endif  // defined(LIGHTMAP_ON)
+        #ifdef DYNAMICLIGHTMAP_ON
             o.lmap.zw = v.texcoord2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
-        #    endif  // DYNAMICLIGHTMAP_ON
-        #endif  // VERTEXLIGHT_ON
+        #endif  // defined(DYNAMICLIGHTMAP_ON)
 
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
