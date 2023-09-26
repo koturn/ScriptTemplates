@@ -158,6 +158,7 @@ Shader "Custom/#SCRIPTNAME#"
             "VRCFallback" = "Hidden"
         }
 
+        Cull [_Cull]
         BlendOp [_BlendOp], [_BlendOpAlpha]
         ZTest [_ZTest]
         ZClip [_ZClip]
@@ -841,7 +842,6 @@ Shader "Custom/#SCRIPTNAME#"
                 "LightMode" = "ForwardBase"
             }
 
-            Cull [_Cull]
             Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
             ZWrite [_ZWrite]
 
@@ -862,7 +862,6 @@ Shader "Custom/#SCRIPTNAME#"
                 "LightMode" = "ForwardAdd"
             }
 
-            Cull [_Cull]
             Blend [_SrcBlend] One
             ZWrite Off
 
@@ -947,7 +946,6 @@ Shader "Custom/#SCRIPTNAME#"
                 "LightMode" = "ShadowCaster"
             }
 
-            Cull [_Cull]
             Blend Off
             ZWrite On
 
