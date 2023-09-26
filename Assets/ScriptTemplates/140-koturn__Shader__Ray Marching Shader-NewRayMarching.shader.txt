@@ -378,12 +378,12 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_ASSUMEINSIDE_ON)
 
             // Static lightmaps
-            #if defined(LIGHTMAP_ON)
+        #if defined(LIGHTMAP_ON)
             o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
-            #    ifdef DYNAMICLIGHTMAP_ON
+        #    ifdef DYNAMICLIGHTMAP_ON
             o.lmap.zw = v.texcoord2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
-            #    endif  // DYNAMICLIGHTMAP_ON
-            #endif  // VERTEXLIGHT_ON
+        #    endif  // DYNAMICLIGHTMAP_ON
+        #endif  // VERTEXLIGHT_ON
 
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
