@@ -367,12 +367,12 @@ Shader "Custom/#SCRIPTNAME#"
         #ifdef _CALCSPACE_WORLD
             const float3 vertPos = mul(unity_ObjectToWorld, v.vertex).xyz;
             o.rayOrigin = _WorldSpaceCameraPos;
-            o.rayDirVec = vertPos - o.rayOrigin;
         #else
             const float3 vertPos = v.vertex.xyz;
             o.rayOrigin = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
-            o.rayDirVec = vertPos - o.rayOrigin;
         #endif  // defined(_CALCSPACE_WORLD)
+            o.rayDirVec = vertPos - o.rayOrigin;
+
         #ifdef _ASSUMEINSIDE_ON
             o.fragPos = vertPos;
         #endif  // defined(_ASSUMEINSIDE_ON)
