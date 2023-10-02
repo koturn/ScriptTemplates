@@ -430,6 +430,13 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_CALCSPACE_WORLD)
             const float3 rayDir = normalize(fi.rayDirVec);
 
+        #ifdef _CALCSPACE_WORLD
+            const float farClipLength = min(_MaxRayLength, _ProjectionParams.z / dot(rayDir, -UNITY_MATRIX_V[2].xyz));
+        #else
+            const float3 worldRayDirVec = mul((float3x3)unity_ObjectToWorld, rayDir);
+            const float invWorldRayDirVecLength = rsqrt(dot(worldRayDirVec, worldRayDirVec));
+            const float farClipLength = min(_MaxRayLength, _ProjectionParams.z / dot(worldRayDirVec * invWorldRayDirVecLength, -UNITY_MATRIX_V[2].xyz) * invWorldRayDirVecLength);
+        #endif  // defined(_CALCSPACE_WORLD)
         #if defined(_ASSUMEINSIDE_MAX_LENGTH)
             // Facing | Start position of the ray                        | Max ray length
             // -------|--------------------------------------------------|-----------------------------------------------------------
@@ -443,17 +450,17 @@ Shader "Custom/#SCRIPTNAME#"
             const float rayDirVecLength = length(fi.rayDirVec);
             const float3 startPos = fi.fragPos - (isFace ? float3(0.0, 0.0, 0.0) : min(rayDirVecLength, maxInsideLength) * rayDir);
             const float initRayLength = length(startPos - rayOrigin);
-            const float maxRayLength = min(_MaxRayLength, rayDirVecLength + (isFace ? maxInsideLength : 0.0));
+            const float maxRayLength = min(farClipLength, rayDirVecLength + (isFace ? maxInsideLength : 0.0));
         #elif defined(_ASSUMEINSIDE_SIMPLE)
             // Facing | Start position of the ray | Max ray length
             // -------|---------------------------|-----------------------------
-            // Front  | Surface of the mesh       | `_MaxRayLength`
+            // Front  | Surface of the mesh       | `farClipLength`
             // Back   | Camera                    | Distance from camera to mesh
             const float initRayLength = isFace ? length(fi.fragPos - rayOrigin) : 0.0;
-            const float maxRayLength = isFace ? _MaxRayLength : length(fi.rayDirVec);
+            const float maxRayLength = isFace ? farClipLength : min(farClipLength, length(fi.rayDirVec));
         #else
             const float initRayLength = 0.0;
-            const float maxRayLength = _MaxRayLength;
+            const float maxRayLength = farClipLength;
         #endif  // defined(_ASSUMEINSIDE_MAX_LENGTH)
 
             const rmout ro = rayMarch(rayOrigin, rayDir, initRayLength, maxRayLength);
