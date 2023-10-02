@@ -1140,6 +1140,9 @@ Shader "Custom/#SCRIPTNAME#"
             #endif  // defined(_CALCSPACE_WORLD)
 
             #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                //
+                // TRANSFER_SHADOW_CASTER_NORMALOFFSET
+                //
                 const float3 vec = worldFinalPos - _LightPositionRange.xyz;
 
                 //
@@ -1149,12 +1152,35 @@ Shader "Custom/#SCRIPTNAME#"
                 fo.color = UnityEncodeCubeShadowDepth((length(vec) + unity_LightShadowBias.x) * _LightPositionRange.w);
                 return fo;
             #else
-                const float depth = getDepth(UnityWorldToClipPos(worldFinalPos));
+                //
+                // TRANSFER_SHADOW_CASTER_NORMALOFFSET
+                //
+                float3 worldPos = worldFinalPos;
+                if (unity_LightShadowBias.z != 0.0) {
+            #    if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+                    const float3 worldLightDir = UnityWorldSpaceLightDir(worldPos);
+            #    else
+                    const float3 worldLightDir = normalize(UnityWorldSpaceLightDir(worldPos));
+            #    endif  // defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+            #    ifdef _CALCSPACE_WORLD
+                    const float3 worldNormal = calcNormal(worldFinalPos);
+            #    else
+                    const float3 worldNormal = UnityObjectToWorldNormal(calcNormal(localFinalPos));
+            #    endif  // defined(_CALCSPACE_WORLD)
+                    const float shadowCos = dot(worldNormal, worldLightDir);
+                    const float shadowSine = sqrt(1.0 - shadowCos * shadowCos);
+                    const float normalBias = unity_LightShadowBias.z * shadowSine;
+                    worldPos.xyz -= worldNormal * normalBias;
+                }
+                const float4 projPos = UnityApplyLinearShadowBias(UnityWorldToClipPos(worldPos));
 
+                //
+                // SHADOW_CASTER_FRAGMENT
+                //
                 fout fo;
-                fo.color = depth.xxxx;
+                fo.color = float4(0.0, 0.0, 0.0, 0.0);
             #    ifndef _NODEPTH_ON
-                fo.depth = depth;
+                fo.depth = getDepth(projPos);
             #    endif  // !defined(_NODEPTH_ON)
                 return fo;
             #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
