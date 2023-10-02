@@ -28,8 +28,11 @@ Shader "Custom/#SCRIPTNAME#"
         [Toggle(_NODEPTH_ON)]
         _NoDepth ("Disable SV_Depth ouput", Int) = 0
 
-        [Toggle(_ASSUMEINSIDE_ON)]
+        [KeywordEnum(None, Simple, Max Length)]
         _AssumeInside ("Assume render target is inside object", Int) = 0
+
+        // e.g.) 1.7321 (~= sqrt(3.0)) for default cube (1x1x1 cube).
+        _MaxInsideLength ("Maximum length inside the object", Float) = 1000.0
 
 
         // ------------------------------------------------------------
@@ -181,7 +184,7 @@ Shader "Custom/#SCRIPTNAME#"
         #pragma target 3.0
 
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
-        #pragma shader_feature_local _ _ASSUMEINSIDE_ON
+        #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
         #pragma shader_feature_local_fragment _ _NODEPTH_ON
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
 
@@ -214,6 +217,8 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float _MarchingFactor;
         //! Scale vector.
         uniform float3 _Scales;
+        //! Maximum length inside the object.
+        uniform float _MaxInsideLength;
 
         //! Color of the objects.
         uniform float4 _Color;
@@ -278,10 +283,10 @@ Shader "Custom/#SCRIPTNAME#"
             //! Camera position in object space. (for pre-calulation on vertex shader)
             nointerpolation float3 cameraPos : TEXCOORD1;
         #endif  // !defined(_CALCSPACE_WORLD)
-        #ifdef _ASSUMEINSIDE_ON
+        #if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             //! Object/World space position of the fragment.
             float3 fragPos : TEXCOORD2;
-        #endif  // defined(_ASSUMEINSIDE_ON)
+        #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
             UNITY_LIGHTING_COORDS(3, 4)
         #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
@@ -370,9 +375,9 @@ Shader "Custom/#SCRIPTNAME#"
             o.rayDirVec = vertPos - o.cameraPos;
         #endif  // defined(_CALCSPACE_WORLD)
 
-        #ifdef _ASSUMEINSIDE_ON
+        #if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             o.fragPos = vertPos;
-        #endif  // defined(_ASSUMEINSIDE_ON)
+        #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
 
         #ifdef LIGHTMAP_ON
             o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
@@ -388,7 +393,7 @@ Shader "Custom/#SCRIPTNAME#"
             return o;
         }
 
-        #ifdef _ASSUMEINSIDE_ON
+        #if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
         /*!
          * @brief Fragment shader function.
          * @param [in] fi  Input data from vertex shader.
@@ -403,7 +408,7 @@ Shader "Custom/#SCRIPTNAME#"
          * @return Color and depth of fragment.
          */
         fout frag(v2f fi)
-        #endif  // defined(_ASSUMEINSIDE_ON)
+        #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
         {
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
@@ -415,7 +420,21 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_CALCSPACE_WORLD)
             const float3 rayDir = normalize(fi.rayDirVec);
 
-        #ifdef _ASSUMEINSIDE_ON
+        #if defined(_ASSUMEINSIDE_MAX_LENGTH)
+            // Facing | Start position of the ray                        | Max ray length
+            // -------|--------------------------------------------------|-----------------------------------------------------------
+            // Front  | Surface of the frontface mesh                    | Distance from camera to backface mesh + `_MaxInsideLength`
+            // Back   | Between Camera and surface of the frontface mesh | Distance from camera to backface mesh
+        #    ifdef _CALCSPACE_WORLD
+            const float maxInsideLength = _MaxInsideLength / length(mul((float3x3)unity_WorldToObject, rayDir));
+        #    else
+            const float maxInsideLength = _MaxInsideLength;
+        #    endif  // defined(_CALCSPACE_WORLD)
+            const float rayDirVecLength = length(fi.rayDirVec);
+            const float3 startPos = fi.fragPos - (isFacing(facing) ? float3(0.0, 0.0, 0.0) : min(rayDirVecLength, maxInsideLength) * rayDir);
+            const float initRayLength = length(startPos - rayOrigin);
+            const float maxRayLength = min(_MaxRayLength, rayDirVecLength + (isFacing(facing) ? maxInsideLength : 0.0));
+        #elif defined(_ASSUMEINSIDE_SIMPLE)
             // Facing | Start position of the ray | Max ray length
             // -------|---------------------------|-----------------------------
             // Front  | Surface of the mesh       | `_MaxRayLength`
@@ -425,7 +444,7 @@ Shader "Custom/#SCRIPTNAME#"
         #else
             const float initRayLength = 0.0;
             const float maxRayLength = _MaxRayLength;
-        #endif  // defined(_ASSUMEINSIDE_ON)
+        #endif  // defined(_ASSUMEINSIDE_MAX_LENGTH)
 
             const rmout ro = rayMarch(rayOrigin, rayDir, initRayLength, maxRayLength);
             if (!ro.isHit) {
@@ -916,7 +935,7 @@ Shader "Custom/#SCRIPTNAME#"
                 return vert(v);
             }
 
-            #    ifdef _ASSUMEINSIDE_ON
+            #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             /*!
              * @brief Fragment shader function.
              * @param [in] fi  Input data from vertex shader.
@@ -937,7 +956,7 @@ Shader "Custom/#SCRIPTNAME#"
             {
                 return frag(fi);
             }
-            #    endif  // defined(_ASSUMEINSIDE_ON)
+            #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             #endif  // defined(_NOFORWARDADD_ON) || defined(_LIGHTING_UNLIT)
             ENDCG
         }
