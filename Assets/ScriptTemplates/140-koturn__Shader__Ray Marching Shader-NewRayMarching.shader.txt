@@ -63,7 +63,8 @@ Shader "Custom/#SCRIPTNAME#"
         [Toggle(_NOFORWARDADD_ON)]
         _NoForwardAdd ("Disable ForwardAdd Pass", Int) = 0
 
-        [Enum(UnityEngine.Rendering.CullMode)]
+        // [Enum(UnityEngine.Rendering.CullMode)]
+        [KeywordEnum(Off, Front, Back)]
         _Cull ("Culling Mode", Int) = 2  // Default: Back
 
         // [HideInInspector]
@@ -185,6 +186,7 @@ Shader "Custom/#SCRIPTNAME#"
 
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
+        #pragma shader_feature_local_fragment _CULL_OFF _CULL_FRONT _CULL_BACK
         #pragma shader_feature_local_fragment _ _NODEPTH_ON
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
 
@@ -393,7 +395,7 @@ Shader "Custom/#SCRIPTNAME#"
             return o;
         }
 
-        #if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #if !defined(_CULL_FRONT) && !defined(_CULL_BACK) && (defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH))
         /*!
          * @brief Fragment shader function.
          * @param [in] fi  Input data from vertex shader.
@@ -413,6 +415,14 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
+        #if defined(_CULL_FRONT)
+            static const bool isFace = false;
+        #elif defined(_CULL_BACK)
+            static const bool isFace = true;
+        #elif defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+            const bool isFace = isFacing(facing);
+        #endif  // defined(_CULL_FRONT)
+
         #ifdef _CALCSPACE_WORLD
             const float3 rayOrigin = _WorldSpaceCameraPos;
         #else
@@ -431,16 +441,16 @@ Shader "Custom/#SCRIPTNAME#"
             const float maxInsideLength = _MaxInsideLength;
         #    endif  // defined(_CALCSPACE_WORLD)
             const float rayDirVecLength = length(fi.rayDirVec);
-            const float3 startPos = fi.fragPos - (isFacing(facing) ? float3(0.0, 0.0, 0.0) : min(rayDirVecLength, maxInsideLength) * rayDir);
+            const float3 startPos = fi.fragPos - (isFace ? float3(0.0, 0.0, 0.0) : min(rayDirVecLength, maxInsideLength) * rayDir);
             const float initRayLength = length(startPos - rayOrigin);
-            const float maxRayLength = min(_MaxRayLength, rayDirVecLength + (isFacing(facing) ? maxInsideLength : 0.0));
+            const float maxRayLength = min(_MaxRayLength, rayDirVecLength + (isFace ? maxInsideLength : 0.0));
         #elif defined(_ASSUMEINSIDE_SIMPLE)
             // Facing | Start position of the ray | Max ray length
             // -------|---------------------------|-----------------------------
             // Front  | Surface of the mesh       | `_MaxRayLength`
             // Back   | Camera                    | Distance from camera to mesh
-            const float initRayLength = isFacing(facing) ? length(fi.fragPos - rayOrigin) : 0.0;
-            const float maxRayLength = isFacing(facing) ? _MaxRayLength : length(fi.rayDirVec);
+            const float initRayLength = isFace ? length(fi.fragPos - rayOrigin) : 0.0;
+            const float maxRayLength = isFace ? _MaxRayLength : length(fi.rayDirVec);
         #else
             const float initRayLength = 0.0;
             const float maxRayLength = _MaxRayLength;
@@ -935,7 +945,7 @@ Shader "Custom/#SCRIPTNAME#"
                 return vert(v);
             }
 
-            #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+            #    if !defined(_CULL_FRONT) && !defined(_CULL_BACK) && (defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH))
             /*!
              * @brief Fragment shader function.
              * @param [in] fi  Input data from vertex shader.
@@ -1084,6 +1094,16 @@ Shader "Custom/#SCRIPTNAME#"
                 return o;
             }
 
+
+            #if defined(_CULL_FRONT) || defined(_CULL_BACK)
+            /*!
+             * @brief Fragment shader function for ShadowCaster pass.
+             * @param [in] fi  Input data from vertex shader.
+             * @param [in] facing  Facing parameter.
+             * @return Depth of fragment.
+             */
+            fout fragShadowCaster(v2f_shadowcaster fi)
+            #else
             /*!
              * @brief Fragment shader function for ShadowCaster pass.
              * @param [in] fi  Input data from vertex shader.
@@ -1091,12 +1111,21 @@ Shader "Custom/#SCRIPTNAME#"
              * @return Depth of fragment.
              */
             fout fragShadowCaster(v2f_shadowcaster fi, face_t facing : FACE_SEMANTICS)
+            #endif
             {
                 UNITY_SETUP_INSTANCE_ID(fi);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
+            #if defined(_CULL_FRONT)
+                static const bool isFace = false;
+            #elif defined(_CULL_BACK)
+                static const bool isFace = true;
+            #else
+                const bool isFace = isFacing(facing);
+            #endif  // defined(_CULL_FRONT)
+
                 const float3 rayOrigin = fi.rayOrigin;
-                const float3 rayDir = normalize(isFacing(facing) ? fi.rayDirVec : -fi.rayDirVec);
+                const float3 rayDir = normalize(isFace ? fi.rayDirVec : -fi.rayDirVec);
 
                 const rmout ro = rayMarch(rayOrigin, rayDir, 0.0, _MaxRayLength);
                 if (!ro.isHit) {
