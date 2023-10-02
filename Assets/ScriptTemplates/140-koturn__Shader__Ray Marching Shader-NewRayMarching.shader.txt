@@ -1025,7 +1025,7 @@ Shader "Custom/#SCRIPTNAME#"
             };
 
 
-            float3 getCameraDirVec(float4 projPos);
+            float3 getCameraDirVec(float4 screenPos);
 
 
             /*!
@@ -1051,41 +1051,41 @@ Shader "Custom/#SCRIPTNAME#"
                 o.pos = UnityApplyLinearShadowBias(o.pos);
             #endif  // !defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)
 
-                float4 projPos = ComputeNonStereoScreenPos(o.pos);
-                COMPUTE_EYEDEPTH(projPos.z);
+                float4 screenPos = ComputeNonStereoScreenPos(o.pos);
+                COMPUTE_EYEDEPTH(screenPos.z);
 
             #ifdef _CALCSPACE_WORLD
                 o.rayOrigin = mul(unity_ObjectToWorld, v.vertex).xyz;
             #    if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
-                o.rayDirVec = getCameraDirVec(projPos);
+                o.rayDirVec = getCameraDirVec(screenPos);
             #    else
                 // o.rayDirVec = UNITY_MATRIX_P[3][3] == 1.0 ? -UNITY_MATRIX_V[2].xyz
                 //     : abs(unity_LightShadowBias.x) < 1.0e-5 ? (o.rayOrigin - _WorldSpaceCameraPos.xyz)
-                //     : getCameraDirVec(projPos);
+                //     : getCameraDirVec(screenPos);
                 UNITY_BRANCH
                 if (UNITY_MATRIX_P[3][3] == 1.0) {
                     o.rayDirVec = -UNITY_MATRIX_V[2].xyz;
                 } else UNITY_BRANCH if (abs(unity_LightShadowBias.x) < 1.0e-5) {
                     o.rayDirVec = (o.rayOrigin - _WorldSpaceCameraPos.xyz);
                 } else {
-                    o.rayDirVec = getCameraDirVec(projPos);
+                    o.rayDirVec = getCameraDirVec(screenPos);
                 }
             #    endif
             #else
                 o.rayOrigin = v.vertex.xyz;
             #    if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
-                o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(projPos));
+                o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(screenPos));
             #    else
                 // o.rayDirVec = UNITY_MATRIX_P[3][3] == 1.0 ? mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz)
                 //     : abs(unity_LightShadowBias.x) < 1.0e-5 ? (o.rayOrigin - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz)
-                //     : mul((float3x3)unity_WorldToObject, getCameraDirVec(projPos));
+                //     : mul((float3x3)unity_WorldToObject, getCameraDirVec(screenPos));
                 UNITY_BRANCH
                 if (UNITY_MATRIX_P[3][3] == 1.0) {
                     o.rayDirVec = mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz);
                 } else UNITY_BRANCH if (abs(unity_LightShadowBias.x) < 1.0e-5) {
                     o.rayDirVec = o.rayOrigin - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
                 } else {
-                    o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(projPos));
+                    o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(screenPos));
                 }
             #    endif
             #endif  // defined(_CALCSPACE_WORLD)
@@ -1187,13 +1187,13 @@ Shader "Custom/#SCRIPTNAME#"
 
 
             /*!
-             * @brief Get unnormalized camera direction vector from projected position.
-             * @param [in] Projected position.
+             * @brief Get unnormalized camera direction vector from screen space position.
+             * @param [in] Screen space position.
              * @return Camera direction in world space.
              */
-            float3 getCameraDirVec(float4 projPos)
+            float3 getCameraDirVec(float4 screenPos)
             {
-                float2 sp = (projPos.xy / projPos.w) * 2.0 - 1.0;
+                float2 sp = (screenPos.xy / screenPos.w) * 2.0 - 1.0;
 
                 // Following code is equivalent to: sp.x *= _ScreenParams.x / _ScreenParams.y;
                 sp.x *= _ScreenParams.x * _ScreenParams.w - _ScreenParams.x;
