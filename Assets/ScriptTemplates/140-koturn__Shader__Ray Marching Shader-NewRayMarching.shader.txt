@@ -344,7 +344,7 @@ Shader "Custom/#SCRIPTNAME#"
         float map(float3 p);
         float sdSphere(float3 p, float r);
         float3 calcNormal(float3 p);
-        float getDepth(float4 projPos);
+        float getDepth(float4 clipPos);
         half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
@@ -492,15 +492,14 @@ Shader "Custom/#SCRIPTNAME#"
                 lmap,
                 half3(0.0, 0.0, 0.0));
 
-            const float4 projPos = UnityWorldToClipPos(worldFinalPos);
+            const float4 clipPos = UnityWorldToClipPos(worldFinalPos);
 
-            UNITY_APPLY_FOG(projPos.z, color);
+            UNITY_APPLY_FOG(clipPos.z, color);
 
             fout fo;
             fo.color = color;
         #ifndef _NODEPTH_ON
-            //! Depth of the pixel.
-            fo.depth = getDepth(projPos);
+            fo.depth = getDepth(clipPos);
         #endif  // !defined(_NODEPTH_ON)
 
             return fo;
@@ -588,13 +587,13 @@ Shader "Custom/#SCRIPTNAME#"
         }
 
         /*!
-         * @brief Get depth from projected position.
-         * @param [in] projPos  Projected position.
+         * @brief Get depth from clip space position.
+         * @param [in] clipPos  Clip space position.
          * @return Depth value.
          */
-        float getDepth(float4 projPos)
+        float getDepth(float4 clipPos)
         {
-            const float depth = projPos.z / projPos.w;
+            const float depth = clipPos.z / clipPos.w;
         #if defined(SHADER_API_GLCORE) \
             || defined(SHADER_API_OPENGL) \
             || defined(SHADER_API_GLES) \
@@ -1172,7 +1171,7 @@ Shader "Custom/#SCRIPTNAME#"
                     const float normalBias = unity_LightShadowBias.z * shadowSine;
                     worldPos.xyz -= worldNormal * normalBias;
                 }
-                const float4 projPos = UnityApplyLinearShadowBias(UnityWorldToClipPos(worldPos));
+                const float4 clipPos = UnityApplyLinearShadowBias(UnityWorldToClipPos(worldPos));
 
                 //
                 // SHADOW_CASTER_FRAGMENT
@@ -1180,7 +1179,7 @@ Shader "Custom/#SCRIPTNAME#"
                 fout fo;
                 fo.color = float4(0.0, 0.0, 0.0, 0.0);
             #    ifndef _NODEPTH_ON
-                fo.depth = getDepth(projPos);
+                fo.depth = getDepth(clipPos);
             #    endif  // !defined(_NODEPTH_ON)
                 return fo;
             #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
