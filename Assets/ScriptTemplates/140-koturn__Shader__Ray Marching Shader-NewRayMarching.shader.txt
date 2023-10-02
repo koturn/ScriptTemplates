@@ -333,7 +333,7 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
 
 
-        rmout rayMarch(float3 rayOrigin, float3 rayDir, float maxRayLength);
+        rmout rayMarch(float3 rayOrigin, float3 rayDir, float initRayLength, float maxRayLength);
         float map(float3 p);
         float sdSphere(float3 p, float r);
         float3 calcNormal(float3 p);
@@ -409,25 +409,25 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
         #ifdef _CALCSPACE_WORLD
-            const float3 cameraPos = _WorldSpaceCameraPos;
+            const float3 rayOrigin = _WorldSpaceCameraPos;
         #else
-            const float3 cameraPos = fi.cameraPos;
+            const float3 rayOrigin = fi.cameraPos;
         #endif  // defined(_CALCSPACE_WORLD)
+            const float3 rayDir = normalize(fi.rayDirVec);
 
         #ifdef _ASSUMEINSIDE_ON
             // Facing | Start position of the ray | Max ray length
             // -------|---------------------------|-----------------------------
             // Front  | Surface of the mesh       | `_MaxRayLength`
             // Back   | Camera                    | Distance from camera to mesh
+            const float initRayLength = isFacing(facing) ? length(fi.fragPos - rayOrigin) : 0.0;
             const float maxRayLength = isFacing(facing) ? _MaxRayLength : length(fi.rayDirVec);
-            const float3 rayOrigin = isFacing(facing) ? fi.fragPos : cameraPos;
         #else
+            const float initRayLength = 0.0;
             const float maxRayLength = _MaxRayLength;
-            const float3 rayOrigin = cameraPos;
         #endif  // defined(_ASSUMEINSIDE_ON)
-            const float3 rayDir = normalize(fi.rayDirVec);
 
-            const rmout ro = rayMarch(rayOrigin, rayDir, maxRayLength);
+            const rmout ro = rayMarch(rayOrigin, rayDir, initRayLength, maxRayLength);
             if (!ro.isHit) {
                 discard;
             }
@@ -481,10 +481,11 @@ Shader "Custom/#SCRIPTNAME#"
          * @brief Execute ray marching.
          * @param [in] rayOrigin  Origin of the ray.
          * @param [in] rayDir  Direction of the ray.
+         * @param [in] initRayLength  Initial ray length.
          * @param [in] maxRayLength  Maximum length of the ray.
          * @return Result of the ray marching.
          */
-        rmout rayMarch(float3 rayOrigin, float3 rayDir, float maxRayLength)
+        rmout rayMarch(float3 rayOrigin, float3 rayDir, float initRayLength, float maxRayLength)
         {
         #if defined(UNITY_PASS_FORWARDBASE)
             const int maxLoop = _MaxLoop;
@@ -498,7 +499,7 @@ Shader "Custom/#SCRIPTNAME#"
             const float marchingFactor = _MarchingFactor * rsqrt(dot(rayDirVec, rayDirVec));
 
             rmout ro;
-            ro.rayLength = 0.0;
+            ro.rayLength = initRayLength;
             ro.isHit = false;
 
             // Loop of Ray Marching.
@@ -1078,7 +1079,7 @@ Shader "Custom/#SCRIPTNAME#"
                 const float3 rayOrigin = fi.rayOrigin;
                 const float3 rayDir = normalize(isFacing(facing) ? fi.rayDirVec : -fi.rayDirVec);
 
-                const rmout ro = rayMarch(rayOrigin, rayDir, _MaxRayLength);
+                const rmout ro = rayMarch(rayOrigin, rayDir, 0.0, _MaxRayLength);
                 if (!ro.isHit) {
                     discard;
                 }
