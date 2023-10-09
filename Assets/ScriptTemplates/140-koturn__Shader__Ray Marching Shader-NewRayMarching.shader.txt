@@ -16,6 +16,10 @@ Shader "Custom/#SCRIPTNAME#"
         _MaxLoopShadowCaster ("Maximum loop count for ShadowCaster", Range(8, 1024)) = 32
 
         _MinRayLength ("Minimum length of the ray", Float) = 0.001
+
+        [KeywordEnum(Use Property Value, Far Clip, Depth Texture)]
+        _MaxRayLengthMode ("Maximum ray length mode", Float) = 1
+
         _MaxRayLength ("Maximum length of the ray", Float) = 1000.0
 
         _MarchingFactor ("Marching Factor", Range(0.5, 1.0)) = 1.0
@@ -186,6 +190,7 @@ Shader "Custom/#SCRIPTNAME#"
 
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
+        #pragma shader_feature_local _MAXRAYLENGTHMODE_USE_PROPERTY_VALUE _MAXRAYLENGTHMODE_FAR_CLIP _MAXRAYLENGTHMODE_DEPTH_TEXTURE
         #pragma shader_feature_local_fragment _CULL_OFF _CULL_FRONT _CULL_BACK
         #pragma shader_feature_local_fragment _ _NODEPTH_ON
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
@@ -245,6 +250,8 @@ Shader "Custom/#SCRIPTNAME#"
         //! Specular power.
         uniform float _SpecPower;
 
+        UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
+
 
         // UNITY_INSTANCING_BUFFER_START(Props)
         //     UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
@@ -289,14 +296,17 @@ Shader "Custom/#SCRIPTNAME#"
             //! Object/World space position of the fragment.
             float3 fragPos : TEXCOORD2;
         #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #ifdef _MAXRAYLENGTHMODE_DEPTH_TEXTURE
+            float4 screenPos : TEXCOORD3;
+        #endif  // defined(_MAXRAYLENGTHMODE_DEPTH_TEXTURE)
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
-            UNITY_LIGHTING_COORDS(3, 4)
+            UNITY_LIGHTING_COORDS(4, 5)
         #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
             //! Lightmap and Dynamic Lightmap coordinate.
-            float4 lmap: TEXCOORD5;
+            float4 lmap: TEXCOORD6;
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             //! Ambient light color.
-            half3 ambient: TEXCOORD5;
+            half3 ambient: TEXCOORD7;
         #endif  // defined(LIGHTMAP_ON)
             //! Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -344,6 +354,7 @@ Shader "Custom/#SCRIPTNAME#"
         float map(float3 p);
         float sdSphere(float3 p, float r);
         float3 calcNormal(float3 p);
+        float getClipRayLength(v2f fi, float3 rayDir);
         float getDepth(float4 clipPos);
         half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
         half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
@@ -391,6 +402,10 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
             o.pos = UnityObjectToClipPos(v.vertex);
+        #ifdef _MAXRAYLENGTHMODE_DEPTH_TEXTURE
+            o.screenPos = ComputeNonStereoScreenPos(o.pos);
+            COMPUTE_EYEDEPTH(o.screenPos.z);
+        #endif  // defined(_MAXRAYLENGTHMODE_DEPTH_TEXTURE)
 
             return o;
         }
@@ -430,13 +445,8 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_CALCSPACE_WORLD)
             const float3 rayDir = normalize(fi.rayDirVec);
 
-        #ifdef _CALCSPACE_WORLD
-            const float farClipLength = min(_MaxRayLength, _ProjectionParams.z / dot(rayDir, -UNITY_MATRIX_V[2].xyz));
-        #else
-            const float3 worldRayDirVec = mul((float3x3)unity_ObjectToWorld, rayDir);
-            const float invWorldRayDirVecLength = rsqrt(dot(worldRayDirVec, worldRayDirVec));
-            const float farClipLength = min(_MaxRayLength, _ProjectionParams.z / dot(worldRayDirVec * invWorldRayDirVecLength, -UNITY_MATRIX_V[2].xyz) * invWorldRayDirVecLength);
-        #endif  // defined(_CALCSPACE_WORLD)
+            const float clipRayLength = getClipRayLength(fi, rayDir);
+
         #if defined(_ASSUMEINSIDE_MAX_LENGTH)
             // Facing | Start position of the ray                        | Max ray length
             // -------|--------------------------------------------------|-----------------------------------------------------------
@@ -450,17 +460,17 @@ Shader "Custom/#SCRIPTNAME#"
             const float rayDirVecLength = length(fi.rayDirVec);
             const float3 startPos = fi.fragPos - (isFace ? float3(0.0, 0.0, 0.0) : min(rayDirVecLength, maxInsideLength) * rayDir);
             const float initRayLength = length(startPos - rayOrigin);
-            const float maxRayLength = min(farClipLength, rayDirVecLength + (isFace ? maxInsideLength : 0.0));
+            const float maxRayLength = min(clipRayLength, rayDirVecLength + (isFace ? maxInsideLength : 0.0));
         #elif defined(_ASSUMEINSIDE_SIMPLE)
             // Facing | Start position of the ray | Max ray length
             // -------|---------------------------|-----------------------------
-            // Front  | Surface of the mesh       | `farClipLength`
+            // Front  | Surface of the mesh       | `clipRayLength`
             // Back   | Camera                    | Distance from camera to mesh
             const float initRayLength = isFace ? length(fi.fragPos - rayOrigin) : 0.0;
-            const float maxRayLength = isFace ? farClipLength : min(farClipLength, length(fi.rayDirVec));
+            const float maxRayLength = isFace ? clipRayLength : min(clipRayLength, length(fi.rayDirVec));
         #else
             const float initRayLength = 0.0;
-            const float maxRayLength = farClipLength;
+            const float maxRayLength = clipRayLength;
         #endif  // defined(_ASSUMEINSIDE_MAX_LENGTH)
 
             const rmout ro = rayMarch(rayOrigin, rayDir, initRayLength, maxRayLength);
@@ -591,6 +601,38 @@ Shader "Custom/#SCRIPTNAME#"
             }
 
             return normalize(normal);
+        }
+
+        /*!
+         * Get clipping ray length.
+         * @param [in] fi  Input data from vertex shader.
+         * @param [in] rayDir  Direction of the ray.
+         * @return Clipping ray length.
+         */
+        float getClipRayLength(v2f fi, float3 rayDir)
+        {
+        #if !defined(_MAXRAYLENGTHMODE_FAR_CLIP) && !defined(_MAXRAYLENGTHMODE_DEPTH_TEXTURE)
+            return _MaxRayLength;
+        #else
+            // `rdv` is cos(x) * y, where x is angle between camera forward direction and ray direction
+            // and y is local scale factor.
+        #    ifdef _CALCSPACE_WORLD
+            const float3 worldRayDir = rayDir;
+            const float rdv = dot(worldRayDir, -UNITY_MATRIX_V[2].xyz);
+        #    else
+            const float3 worldRayDirVec = mul((float3x3)unity_ObjectToWorld, rayDir);
+            const float rcpWorldRayDirVecLength = rsqrt(dot(worldRayDirVec, worldRayDirVec));
+            const float3 worldRayDir = worldRayDirVec * rcpWorldRayDirVecLength;
+            const float rdv = dot(worldRayDir, -UNITY_MATRIX_V[2].xyz) * rcpWorldRayDirVecLength;
+        #    endif  // defined(_CALCSPACE_WORLD)
+
+        #    ifdef _MAXRAYLENGTHMODE_FAR_CLIP
+            const float linearDepth = _ProjectionParams.z;
+        #    else
+            const float linearDepth = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, fi.screenPos));
+        #    endif  // defined(_MAXRAYLENGTHMODE_FAR_CLIP)
+            return linearDepth / rdv;
+        #endif
         }
 
         /*!
