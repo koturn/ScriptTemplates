@@ -1,0 +1,21 @@
+using UnityEditor;
+using UnityEngine;
+
+
+namespace Custom
+{
+    /// <summary>
+    /// Custom editor of shaders.
+    /// </summary>
+    public class #SCRIPTNAME# : ShaderGUI
+    {
+        /// <summary>
+        /// Draw property items.
+        /// </summary>
+        /// <param name="me">The <see cref="MaterialEditor"/> that are calling this <see cref="OnGUI(MaterialEditor, MaterialProperty[])"/> (the 'owner').</param>
+        /// <param name="mps">Material properties of the current selected shader.</param>
+        public override void OnGUI(MaterialEditor me, MaterialProperty[] mps)
+        {
+        }
+    }
+}

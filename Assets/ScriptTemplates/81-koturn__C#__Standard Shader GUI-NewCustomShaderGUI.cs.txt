@@ -1,0 +1,1436 @@
+#define NO_UNSAFE
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+
+namespace Custom
+{
+    /// <summary>
+    /// Custom editor for common properties.
+    /// </summary>
+    public class #SCRIPTNAME# : ShaderGUI
+    {
+        /// <summary>
+        /// Property name of "_Color".
+        /// </summary>
+        private const string PropNameColor = "_Color";
+        /// <summary>
+        /// Property name of "_Lighting".
+        /// </summary>
+        private const string PropNameLighting = "_Lighting";
+        /// <summary>
+        /// Property name of "_SpecColor".
+        /// </summary>
+        private const string PropNameSpecColor = "_SpecColor";
+        /// <summary>
+        /// Property name of "_SpecPower".
+        /// </summary>
+        private const string PropNameSpecPower = "_SpecPower";
+        /// <summary>
+        /// Property name of "_Glossiness".
+        /// </summary>
+        private const string PropNameGlossiness = "_Glossiness";
+        /// <summary>
+        /// Property name of "_Metallic".
+        /// </summary>
+        private const string PropNameMetallic = "_Metallic";
+        /// <summary>
+        /// Property name of "_NoForwardAdd".
+        /// </summary>
+        private const string PropNameNoForwardAdd = "_NoForwardAdd";
+        /// <summary>
+        /// Property name of "_Cull".
+        /// </summary>
+        private const string PropNameCull = "_Cull";
+        /// <summary>
+        /// Property name of "_FlipNormal".
+        /// </summary>
+        private const string PropNameFlipNormal = "_FlipNormal";
+        /// <summary>
+        /// Property name of "_Mode".
+        /// </summary>
+        private const string PropNameMode = "_Mode";
+        /// <summary>
+        /// Property name of "_AlphaTest".
+        /// </summary>
+        private const string PropNameAlphaTest = "_AlphaTest";
+        /// <summary>
+        /// Property name of "_Cutoff".
+        /// </summary>
+        private const string PropNameCutoff = "_Cutoff";
+        /// <summary>
+        /// Property name of "_SrcBlend".
+        /// </summary>
+        private const string PropNameSrcBlend = "_SrcBlend";
+        /// <summary>
+        /// Property name of "_DstBlend".
+        /// </summary>
+        private const string PropNameDstBlend = "_DstBlend";
+        /// <summary>
+        /// Property name of "_SrcBlendAlpha".
+        /// </summary>
+        private const string PropNameSrcBlendAlpha = "_SrcBlendAlpha";
+        /// <summary>
+        /// Property name of "_DstBlendAlpha".
+        /// </summary>
+        private const string PropNameDstBlendAlpha = "_DstBlendAlpha";
+        /// <summary>
+        /// Property name of "_BlendOp".
+        /// </summary>
+        private const string PropNameBlendOp = "_BlendOp";
+        /// <summary>
+        /// Property name of "_BlendOpAlpha".
+        /// </summary>
+        private const string PropNameBlendOpAlpha = "_BlendOpAlpha";
+        /// <summary>
+        /// Property name of "_ZTest".
+        /// </summary>
+        private const string PropNameZTest = "_ZTest";
+        /// <summary>
+        /// Property name of "_ZClip".
+        /// </summary>
+        private const string PropNameZClip = "_ZClip";
+        /// <summary>
+        /// Property name of "_ZWrite".
+        /// </summary>
+        private const string PropNameZWrite = "_ZWrite";
+        /// <summary>
+        /// Property name of "_OffsetFactor".
+        /// </summary>
+        private const string PropNameOffsetFactor = "_OffsetFactor";
+        /// <summary>
+        /// Property name of "_OffsetUnit".
+        /// </summary>
+        private const string PropNameOffsetUnit = "_OffsetUnit";
+        /// <summary>
+        /// Property name of "_ColorMask".
+        /// </summary>
+        private const string PropNameColorMask = "_ColorMask";
+        /// <summary>
+        /// Property name of "_AlphaToMask".
+        /// </summary>
+        private const string PropNameAlphaToMask = "_AlphaToMask";
+        /// <summary>
+        /// Property name of "_StencilRef".
+        /// </summary>
+        private const string PropNameStencilRef = "_StencilRef";
+        /// <summary>
+        /// Property name of "_StencilReadMask".
+        /// </summary>
+        private const string PropNameStencilReadMask = "_StencilReadMask";
+        /// <summary>
+        /// Property name of "_StencilWriteMask".
+        /// </summary>
+        private const string PropNameStencilWriteMask = "_StencilWriteMask";
+        /// <summary>
+        /// Property name of "_StencilComp".
+        /// </summary>
+        private const string PropNameStencilComp = "_StencilComp";
+        /// <summary>
+        /// Property name of "_StencilPass".
+        /// </summary>
+        private const string PropNameStencilPass = "_StencilPass";
+        /// <summary>
+        /// Property name of "_StencilFail".
+        /// </summary>
+        private const string PropNameStencilFail = "_StencilFail";
+        /// <summary>
+        /// Property name of "_StencilZFail".
+        /// </summary>
+        private const string PropNameStencilZFail = "_StencilZFail";
+        /// <summary>
+        /// Tag name of "RenderType".
+        /// </summary>
+        private const string TagRenderType = "RenderType";
+        /// <summary>
+        /// Tag name of "VRCFallback".
+        /// </summary>
+        private const string TagVRCFallback = "VRCFallback";
+
+        /// <summary>
+        /// Cache of compiled reflection result of <see cref="CreateClearPropertyHandlerCacheDelegate"/>.
+        /// </summary>
+        private static Action _clearPropertyHandlerCache;
+        /// <summary>
+        /// Cache of compiled reflection result of <see cref="CreateClearDecoratorDrawersDelegate"/>.
+        /// </summary>
+        private static Action<Shader, MaterialProperty> _clearDecoratorDrawers;
+        /// <summary>
+        /// Cache of compiled reflection result of <see cref="CreateToggleKeywordDelegate"/>
+        /// </summary>
+        private static Action<Shader, MaterialProperty, bool> _toggleKeyword;
+
+        /// <summary>
+        /// Current editor UI mode.
+        /// </summary>
+        private static EditorMode _editorMode;
+        /// <summary>
+        /// Editor UI mode names.
+        /// </summary>
+        private static readonly string[] _editorModeNames;
+        /// <summary>
+        /// Stencil property names.
+        /// </summary>
+        private static readonly string[] _stencilPropNames;
+
+        /// <summary>
+        /// Initialize <see cref="_editorMode"/>, <see cref="_editorModeNames"/> and <see cref="_stencilPropNames"/>.
+        /// </summary>
+        static #SCRIPTNAME#()
+        {
+            _editorMode = (EditorMode)(-1);
+            _editorModeNames = Enum.GetNames(typeof(EditorMode));
+            _stencilPropNames = new []
+            {
+                PropNameStencilRef,
+                PropNameStencilReadMask,
+                PropNameStencilWriteMask,
+                PropNameStencilComp,
+                PropNameStencilPass,
+                PropNameStencilFail,
+                PropNameStencilZFail
+            };
+        }
+
+
+        /// <summary>
+        /// Draw property items.
+        /// </summary>
+        /// <param name="me">The <see cref="MaterialEditor"/> that are calling this <see cref="OnGUI(MaterialEditor, MaterialProperty[])"/> (the 'owner').</param>
+        /// <param name="mps">Material properties of the current selected shader.</param>
+        public override void OnGUI(MaterialEditor me, MaterialProperty[] mps)
+        {
+            if (!Enum.IsDefined(typeof(EditorMode), _editorMode))
+            {
+                ClearDecoratorDrawers(((Material)me.target).shader, mps);
+                _editorMode = EditorMode.Custom;
+            }
+            using (var ccScope = new EditorGUI.ChangeCheckScope())
+            {
+                _editorMode = (EditorMode)GUILayout.Toolbar((int)_editorMode, _editorModeNames);
+                if (ccScope.changed)
+                {
+                    if (_editorMode == EditorMode.Default)
+                    {
+                        ClearPropertyHandlerCache();
+                    }
+                    else
+                    {
+                        ClearDecoratorDrawers(((Material)me.target).shader, mps);
+                    }
+                }
+            }
+            if (_editorMode == EditorMode.Default)
+            {
+                base.OnGUI(me, mps);
+                return;
+            }
+
+            EditorGUILayout.LabelField("Lighting Parameters", EditorStyles.boldLabel);
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+            {
+                ShaderProperty(me, mps, PropNameColor, false);
+
+                var mpLighting = FindAndDrawProperty(me, mps, PropNameLighting, false);
+                var lightingMethod = (LightingMethod)(mpLighting == null ? -1 : (int)mpLighting.floatValue);
+
+
+                using (new EditorGUI.DisabledScope(lightingMethod == LightingMethod.UnityLambert || lightingMethod == LightingMethod.Unlit))
+                {
+                    var isCustomLit = lightingMethod == LightingMethod.Custom;
+
+                    ShaderProperty(me, mps, PropNameGlossiness, false);
+                    using (new EditorGUI.DisabledScope(!isCustomLit && (lightingMethod != LightingMethod.UnityStandard)))
+                    {
+                        ShaderProperty(me, mps, PropNameMetallic, false);
+                    }
+                    using (new EditorGUI.DisabledScope(!isCustomLit && lightingMethod != LightingMethod.UnityBlinnPhong && lightingMethod != LightingMethod.UnityStandardSpecular))
+                    {
+                        ShaderProperty(me, mps, PropNameSpecColor, false);
+                    }
+                    using (new EditorGUI.DisabledScope(!isCustomLit && lightingMethod != LightingMethod.UnityBlinnPhong))
+                    {
+                        ShaderProperty(me, mps, PropNameSpecPower, false);
+                    }
+                }
+            }
+
+            DrawCustomProperties(me, mps);
+
+            EditorGUILayout.Space();
+
+            EditorGUILayout.LabelField("Rendering Options", EditorStyles.boldLabel);
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+            {
+                ShaderProperty(me, mps, PropNameNoForwardAdd, false);
+
+                var mpCull = FindAndDrawProperty(me, mps, PropNameCull, false);
+                using (new EditorGUI.DisabledScope(mpCull != null && (CullMode)mpCull.floatValue != CullMode.Back))
+                {
+                    ShaderProperty(me, mps, PropNameFlipNormal, false);
+                }
+
+                DrawRenderingMode(me, mps);
+                ShaderProperty(me, mps, PropNameZTest, false);
+                ShaderProperty(me, mps, PropNameZClip, false);
+                DrawOffsetProperties(me, mps, PropNameOffsetFactor, PropNameOffsetUnit);
+                ShaderProperty(me, mps, PropNameColorMask, false);
+                ShaderProperty(me, mps, PropNameAlphaToMask, false);
+
+                EditorGUILayout.Space();
+                DrawBlendProperties(me, mps);
+                EditorGUILayout.Space();
+                DrawStencilProperties(me, mps);
+                EditorGUILayout.Space();
+                DrawAdvancedOptions(me, mps);
+            }
+        }
+
+        /// <summary>
+        /// Draw custom properties.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/>.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        protected virtual void DrawCustomProperties(MaterialEditor me, MaterialProperty[] mps)
+        {
+            // Do nothing.
+        }
+
+        /// <summary>
+        /// Draw default item of specified shader property.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/>.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        /// <param name="propName">Name of shader property.</param>
+        /// <param name="isMandatory">If <c>true</c> then this method will throw an exception
+        /// if a property with <<paramref name="propName"/> was not found.</param>
+        protected static void ShaderProperty(MaterialEditor me, MaterialProperty[] mps, string propName, bool isMandatory = true)
+        {
+            var prop = FindProperty(propName, mps, isMandatory);
+            if (prop != null)
+            {
+                ShaderProperty(me, prop);
+            }
+        }
+
+        /// <summary>
+        /// Draw default item of specified shader property.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/>.</param>
+        /// <param name="mp">Target <see cref="MaterialProperty"/>.</param>
+        protected static void ShaderProperty(MaterialEditor me, MaterialProperty mp)
+        {
+            if (mp != null)
+            {
+                me.ShaderProperty(mp, mp.displayName);
+            }
+        }
+
+        /// <summary>
+        /// Draw default item of specified shader property and return the property.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/>.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        /// <param name="propName">Name of shader property.</param>
+        /// <param name="isMandatory">If <c>true</c> then this method will throw an exception
+        /// if a property with <<paramref name="propName"/> was not found.</param>
+        /// <return>Found property.</return>
+        protected static MaterialProperty FindAndDrawProperty(MaterialEditor me, MaterialProperty[] mps, string propName, bool isMandatory = true)
+        {
+            var prop = FindProperty(propName, mps, isMandatory);
+            if (prop != null)
+            {
+                ShaderProperty(me, prop);
+            }
+
+            return prop;
+        }
+
+        /// <summary>
+        /// Find properties which has specified names.
+        /// </summary>
+        /// <param name="propNames">Names of shader property.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        /// <param name="isMandatory">If <c>true</c> then this method will throw an exception
+        /// if one of properties with <<paramref name="propNames"/> was not found.</param>
+        /// <return>Found properties.</return>
+        protected static List<MaterialProperty> FindProperties(string[] propNames, MaterialProperty[] mps, bool isMandatory = true)
+        {
+            var mpList = new List<MaterialProperty>(propNames.Length);
+            foreach (var propName in propNames)
+            {
+                var prop = FindProperty(propName, mps, isMandatory);
+                if (prop != null)
+                {
+                    mpList.Add(prop);
+                }
+            }
+
+            return mpList;
+        }
+
+        /// <summary>
+        /// Draw inspector items of <see cref="RenderingMode"/>.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/></param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array</param>
+        private void DrawRenderingMode(MaterialEditor me, MaterialProperty[] mps)
+        {
+            var mpMMode = FindProperty(PropNameMode, mps, false);
+            var mode = RenderingMode.Custom;
+            if (mpMMode != null)
+            {
+                using (var ccScope = new EditorGUI.ChangeCheckScope())
+                {
+                    mode = (RenderingMode)EditorGUILayout.EnumPopup(mpMMode.displayName, (RenderingMode)mpMMode.floatValue);
+                    mpMMode.floatValue = (float)mode;
+                    if (ccScope.changed)
+                    {
+                        if (mode != RenderingMode.Custom)
+                        {
+                            ApplyRenderingMode(me, mps, mode);
+                        }
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(mode != RenderingMode.Cutout && mode != RenderingMode.Custom))
+            {
+                var mpAlphaTest = FindAndDrawProperty(me, mps, PropNameAlphaTest, false);
+                if (mpAlphaTest != null)
+                {
+                    using (new EditorGUI.IndentLevelScope())
+                    using (new EditorGUI.DisabledScope(!ToBool(mpAlphaTest.floatValue)))
+                    {
+                        ShaderProperty(me, mps, PropNameCutoff);
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(mode != RenderingMode.Custom))
+            {
+                ShaderProperty(me, mps, PropNameZWrite, false);
+            }
+        }
+
+        /// <summary>
+        /// <para>Change rendeing mode.</para>
+        /// <para>In other words, change following values.
+        /// <list type="bullet">
+        ///   <item>Value of material tag, "RenderType".</item>
+        ///   <item>Value of render queue.</item>
+        ///   <item>Shader property, "_AlphaTest" and related tag, "_ALPHATEST_ON".</item>
+        ///   <item>Shader property, "_ZWrite".</item>
+        ///   <item>Shader property, "_SrcBlend".</item>
+        ///   <item>Shader property, "_DstBlend".</item>
+        ///   <item>Shader property, "_SrcBlendAlpha".</item>
+        ///   <item>Shader property, "_DstBlendAlpha".</item>
+        ///   <item>Shader property, "_BlendOp".</item>
+        ///   <item>Shader property, "_BlendOpAlpha".</item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/>.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        /// <param name="renderingMode">Rendering mode.</param>
+        private static void ApplyRenderingMode(MaterialEditor me, MaterialProperty[] mps, RenderingMode renderingMode)
+        {
+            var config = new RenderingModeConfig(renderingMode);
+
+            foreach (var material in me.targets.Cast<Material>())
+            {
+                // SetRenderTypeTag(material, config.RenderType);
+                SetRenderQueue(material, config.RenderQueue);
+            }
+
+            var mpAlphaTest = FindProperty(PropNameAlphaTest, mps, false);
+            if (mpAlphaTest != null)
+            {
+                mpAlphaTest.floatValue = ToFloat(config.IsAlphaTestEnabled);
+                ToggleKeyword(((Material)me.target).shader, mpAlphaTest);
+            }
+
+            SetPropertyValue(PropNameZWrite, mps, config.IsZWriteEnabled, false);
+            SetPropertyValue(PropNameSrcBlend, mps, config.SrcBlend, false);
+            SetPropertyValue(PropNameDstBlend, mps, config.DstBlend, false);
+            SetPropertyValue(PropNameSrcBlendAlpha, mps, config.SrcBlendAlpha, false);
+            SetPropertyValue(PropNameDstBlendAlpha, mps, config.DstBlendAlpha, false);
+            SetPropertyValue(PropNameBlendOp, mps, config.BlendOp, false);
+            SetPropertyValue(PropNameBlendOp, mps, config.BlendOpAlpha, false);
+        }
+
+        /// <summary>
+        /// Draw inspector items of "Blend".
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/></param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array</param>
+        private void DrawBlendProperties(MaterialEditor me, MaterialProperty[] mps)
+        {
+            var mpMode = FindProperty(PropNameMode, mps, false);
+            using (new EditorGUI.DisabledScope(mpMode != null && (RenderingMode)mpMode.floatValue != RenderingMode.Custom))
+            {
+                var propSrcBlend = FindProperty(PropNameSrcBlend, mps, false);
+                var propDstBlend = FindProperty(PropNameDstBlend, mps, false);
+                if (propSrcBlend == null || propDstBlend == null)
+                {
+                    return;
+                }
+
+                EditorGUILayout.LabelField("Blend", EditorStyles.boldLabel);
+                using (new EditorGUI.IndentLevelScope())
+                using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+                {
+                    ShaderProperty(me, propSrcBlend);
+                    ShaderProperty(me, propDstBlend);
+
+                    var propSrcBlendAlpha = FindProperty(PropNameSrcBlendAlpha, mps, false);
+                    var propDstBlendAlpha = FindProperty(PropNameDstBlendAlpha, mps, false);
+                    if (propSrcBlendAlpha != null && propDstBlendAlpha != null)
+                    {
+                        ShaderProperty(me, propSrcBlendAlpha);
+                        ShaderProperty(me, propDstBlendAlpha);
+                    }
+
+                    ShaderProperty(me, mps, PropNameBlendOp, false);
+                    ShaderProperty(me, mps, PropNameBlendOpAlpha, false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draw inspector items of "Offset".
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/></param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array</param>
+        /// <param name="propNameFactor">Property name for the first argument of "Offset"</param>
+        /// <param name="propNameUnit">Property name for the second argument of "Offset"</param>
+        private static void DrawOffsetProperties(MaterialEditor me, MaterialProperty[] mps, string propNameFactor, string propNameUnit)
+        {
+            var propFactor = FindProperty(propNameFactor, mps, false);
+            var propUnit = FindProperty(propNameUnit, mps, false);
+            if (propFactor == null || propUnit == null)
+            {
+                return;
+            }
+            EditorGUILayout.LabelField("Offset");
+            using (new EditorGUI.IndentLevelScope())
+            {
+                ShaderProperty(me, propFactor);
+                ShaderProperty(me, propUnit);
+            }
+        }
+
+        /// <summary>
+        /// Draw inspector items of Stencil.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/></param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array</param>
+        private static void DrawStencilProperties(MaterialEditor me, MaterialProperty[] mps)
+        {
+            var stencilProps = FindProperties(_stencilPropNames, mps, false);
+
+            if (stencilProps.Count == 0)
+            {
+                return;
+            }
+
+            EditorGUILayout.LabelField("Stencil", EditorStyles.boldLabel);
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+            {
+                foreach (var prop in stencilProps)
+                {
+                    me.ShaderProperty(prop, prop.displayName);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draw inspector items of advanced options.
+        /// </summary>
+        /// <param name="me">A <see cref="MaterialEditor"/>.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        private static void DrawAdvancedOptions(MaterialEditor me, MaterialProperty[] mps)
+        {
+            EditorGUILayout.LabelField("Advanced Options", EditorStyles.boldLabel);
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+            {
+                me.RenderQueueField();
+#if UNITY_5_6_OR_NEWER
+                me.EnableInstancingField();
+                me.DoubleSidedGIField();
+#endif  // UNITY_5_6_OR_NEWER
+            }
+        }
+
+        /// <summary>
+        /// Draw items for the tag, "VRCFallback".
+        /// </summary>
+        /// <param name="material">A material.</param>
+        /// <remarks>
+        /// <seealso href="https://docs.vrchat.com/docs/shader-fallback-system"/>
+        /// </remarks>
+        [System.Diagnostics.Conditional("VRC_SDK_VRCSDK2"), System.Diagnostics.Conditional("VRC_SDK_VRCSDK3")]
+        private void DrawVRCFallbackGUI(Material material)
+        {
+            EditorGUILayout.LabelField(TagVRCFallback, EditorStyles.boldLabel);
+            using (new EditorGUI.IndentLevelScope())
+            using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+            {
+                if (GUILayout.Button("Reset to Default"))
+                {
+                    material.SetOverrideTag(TagVRCFallback, "");
+                }
+                var tagVal = material.GetTag(TagVRCFallback, false);
+
+                using (new EditorGUILayout.VerticalScope(GUI.skin.box))
+                using (var ccScope = new EditorGUI.ChangeCheckScope())
+                {
+                    var shaderType = VRCFallbackPopupItem<VRCFallbackShaderType>("Shader Type", tagVal);
+                    var strHidden = VRCFallbackShaderType.Hidden.ToString();
+                    var isHidden = shaderType == strHidden;
+                    using (new EditorGUI.DisabledScope(isHidden))
+                    {
+                        var renderingMode = VRCFallbackPopupItem<VRCFallbackRenderType>("Rendering Mode", tagVal, false);
+                        var facing = VRCFallbackPopupItem<VRCFallbackCullType>("Facing", tagVal, false);
+                        if (ccScope.changed)
+                        {
+                            var newTagVal = isHidden ? strHidden : (shaderType + renderingMode + facing);
+                            EditorGUILayout.LabelField("Result", '"' + newTagVal + '"');
+                            material.SetOverrideTag(TagVRCFallback, newTagVal);
+                        }
+                        else
+                        {
+                            EditorGUILayout.LabelField("Result", '"' + tagVal + '"');
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Draw one of popup item of VRCFallback shader.
+        /// </summary>
+        /// <typeparam name="T"><see cref="VRCFallbackShaderType"/>, <see cref="VRCFallbackRenderType"/> or <see cref="VRCFallbackCullType"/>.</typeparam>
+        /// <param name="label">Label text.</param>
+        /// <param name="tagVal">Value of "VRCFallback".</param>
+        /// <param name="allowDefault">Allow default value or not.</param>
+        /// <param name="defaultVal">Default value.</param>
+        /// <returns>Return name of estimated selected popup item.
+        /// If no popup item is found or <paramref name="allowDefault"/> is true and default value is selected,
+        /// returns <see cref="string.Empty"/></returns>
+        private static string VRCFallbackPopupItem<T>(string label, string tagVal, bool allowDefault = true, int defaultVal = 0)
+            where T : Enum
+        {
+            var type = typeof(T);
+            var names = Enum.GetNames(type);
+            var val = GetCurrentSelectedValue<T>(tagVal, names, allowDefault);
+            val = EditorGUILayout.Popup(label, val, names);
+            if (Enum.IsDefined(type, val) && (allowDefault || val != defaultVal))
+            {
+                return Enum.GetName(type, val);
+            }
+            else
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Estimate and get the current selected popup item.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="tagVal">Value of "VRCFallback".</param>
+        /// <param name="enumNames">Enum names of <see cref="VRCFallbackShaderType"/>, <see cref="VRCFallbackRenderType"/> or <see cref="VRCFallbackCullType"/>.</param>
+        /// <param name="allowDefault">Allow default value or not.</param>
+        /// <returns>Enum value of selected item.</returns>
+        private static int GetCurrentSelectedValue<T>(string tagVal, string[] enumNames, bool allowDefault = true)
+            where T : Enum
+        {
+            var query = enumNames.Zip(Enum.GetValues(typeof(T)).Cast<int>(), (name, val) => (name, val));
+            foreach (var (name, val) in allowDefault ? query : query.Skip(1))
+            {
+                if (tagVal.Contains(name))
+                {
+                    return val;
+                }
+            }
+
+            return default;
+        }
+
+        /// <summary>
+        /// Set render queue value if the value is differ from the default.
+        /// </summary>
+        /// <param name="material">Target material.</param>
+        /// <param name="renderQueue"><see cref="RenderQueue"/> to set.</param>
+        private static void SetRenderTypeTag(Material material, RenderType renderType)
+        {
+            // Set to default and get the default.
+            material.SetOverrideTag(TagRenderType, string.Empty);
+            var defaultTagval = material.GetTag(TagRenderType, false, "Transparent");
+
+            // Set specified render type value if the value differs from the default.
+            var renderTypeValue = renderType.ToString();
+            if (renderTypeValue != defaultTagval)
+            {
+                material.SetOverrideTag(TagRenderType, renderTypeValue);
+            }
+        }
+
+        /// <summary>
+        /// Set render queue value if the value is differ from the default.
+        /// </summary>
+        /// <param name="material">Target material.</param>
+        /// <param name="renderQueue"><see cref="RenderQueue"/> to set.</param>
+        private static void SetRenderQueue(Material material, RenderQueue renderQueue)
+        {
+            // Set to default and get the default.
+            material.renderQueue = -1;
+            var defaultRenderQueue = material.renderQueue;
+
+            // Set specified render queue value if the value differs from the default.
+            var renderQueueValue = (int)renderQueue;
+            if (defaultRenderQueue != renderQueueValue)
+            {
+                material.renderQueue = renderQueueValue;
+            }
+        }
+
+        /// <summary>
+        /// Set property value.
+        /// </summary>
+        /// <param name="propName">Names of shader property.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        /// <param name="val">Value to set. (true: 1.0f, false 0.0f).</param>
+        /// <param name="isMandatory">
+        /// If true then this method will throw an exception if property <paramref name="propName"/> is not found.
+        /// Otherwise do nothing if property with <paramref name="propName"/> is not found.
+        /// </param>
+        private static void SetPropertyValue(string propName, MaterialProperty[] mps, bool val, bool isMandatory = true)
+        {
+            var prop = FindProperty(propName, mps, isMandatory);
+            if (prop != null)
+            {
+                prop.floatValue = ToFloat(val);
+            }
+        }
+
+        /// <summary>
+        /// Set property value.
+        /// </summary>
+        /// <typeparam name="T">Type of enum.</typeparam>
+        /// <param name="propName">Names of shader property.</param>
+        /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
+        /// <param name="val">Value to set, which is cast to <see cref="float"/>.</param>
+        /// <param name="isMandatory">
+        /// If true then this method will throw an exception if property <paramref name="propName"/> was not found.
+        /// Otherwise do nothing if property with <paramref name="propName"/> was not found.
+        /// </param>
+        private static void SetPropertyValue<T>(string propName, MaterialProperty[] mps, T val, bool isMandatory = true)
+            where T : unmanaged, Enum
+        {
+            var prop = FindProperty(propName, mps, isMandatory);
+            if (prop != null)
+            {
+                prop.floatValue = ToInt(val);
+            }
+        }
+
+        /// <summary>
+        /// Clear cache of MaterialPropertyHandler.
+        /// </summary>
+        private static void ClearPropertyHandlerCache()
+        {
+            (_clearPropertyHandlerCache ?? (_clearPropertyHandlerCache = CreateClearPropertyHandlerCacheDelegate()))();
+        }
+
+        /// <summary>
+        /// Remove all decorator drawers from all MaterialProperties.
+        /// </summary>
+        /// <param name="shader">Target <see cref="Shader"/>.</param>
+        /// <param name="mps">Target <see cref="MaterialProperty"/> array.</param>
+        private static void ClearDecoratorDrawers(Shader shader, MaterialProperty[] mps)
+        {
+            var clearDecoratorDrawers = _clearDecoratorDrawers ?? (_clearDecoratorDrawers = CreateClearDecoratorDrawersDelegate());
+            foreach (var mp in mps)
+            {
+                clearDecoratorDrawers(shader, mp);
+            }
+        }
+
+        /// <summary>
+        /// Enable or disable keyword of <see cref="MaterialProperty"/> which has MaterialToggleUIDrawer.
+        /// </summary>
+        /// <param name="shader">Target <see cref="Shader"/>.</param>
+        /// <param name="prop">Target <see cref="MaterialProperty"/>.</param>
+        private static void ToggleKeyword(Shader shader, MaterialProperty prop)
+        {
+            ToggleKeyword(shader, prop, ToBool(prop.floatValue));
+        }
+
+        /// <summary>
+        /// Enable or disable keyword of <see cref="MaterialProperty"/> which has MaterialToggleUIDrawer.
+        /// </summary>
+        /// <param name="shader">Target <see cref="Shader"/>.</param>
+        /// <param name="prop">Target <see cref="MaterialProperty"/>.</param>
+        /// <param name="isOn">True to enable (define) keyword, false to disable (undefine) keyword.</param>
+        private static void ToggleKeyword(Shader shader, MaterialProperty prop, bool isOn)
+        {
+            try
+            {
+                (_toggleKeyword ?? (_toggleKeyword = CreateSetKeywordDelegate()))(shader, prop, isOn);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(ex.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Convert a <see cref="float"/> value to <see cref="bool"/> value.
+        /// </summary>
+        /// <param name="floatValue">Source <see cref="float"/> value.</param>
+        /// <returns>True if <paramref name="floatValue"/> is greater than 0.5, otherwise false.</returns>
+        private static bool ToBool(float floatValue)
+        {
+            return floatValue >= 0.5f;
+        }
+
+        /// <summary>
+        /// Convert a <see cref="bool"/> value to <see cref="float"/> value.
+        /// </summary>
+        /// <param name="boolValue">Source <see cref="bool"/> value.</param>
+        /// <returns>1.0f if <paramref name="boolValue"/> is true, otherwise 0.0f.</returns>
+        private static float ToFloat(bool boolValue)
+        {
+            return boolValue ? 1.0f : 0.0f;
+        }
+
+        /// <summary>
+        /// Cast generic enum to <see cref="int"/>.
+        /// </summary>
+        /// <typeparam name="T">Type of enum.</typeparam>
+        /// <param name="val">Enum value.</param>
+        /// <returns><see cref="int"/> value converted from <typeparamref name="T"/>.</returns>
+        private static int ToInt<T>(T val)
+            where T : unmanaged, Enum
+        {
+#if NO_UNSAFE
+            return val.GetHashCode();
+#else
+            unsafe
+            {
+                return sizeof(T) == 8 ? (int)*(long*)&val
+                    : sizeof(T) == 4 ? *(int*)&val
+                    : sizeof(T) == 2 ? (int)*(short*)&val
+                    : (int)*(byte*)&val;
+            }
+#endif
+        }
+
+        /// <summary>
+        /// <para>Create delegate of compiled reflection result which clears cache of MaterialPropertyHandler.</para>
+        /// <para>Psudo-code of result lambda is following.</para>
+        /// <code>
+        /// () => MaterialPropertyHandler.s_PropertyHandlers.Clear();
+        /// </code>
+        /// </summary>
+        private static Action CreateClearPropertyHandlerCacheDelegate()
+        {
+            var typeMph = Assembly.GetAssembly(typeof(MaterialPropertyDrawer)).GetType("UnityEditor.MaterialPropertyHandler")
+                ?? throw new InvalidOperationException("Type not found: UnityEditor.MaterialPropertyHandler");
+
+            return Expression.Lambda<Action>(
+                Expression.Call(
+                    Expression.Field(
+                        null,
+                        typeMph.GetField(
+                            "s_PropertyHandlers",
+                            BindingFlags.NonPublic
+                                | BindingFlags.Static)),
+                    Assembly.GetAssembly(typeof(object)).GetType("System.Collections.Generic.Dictionary`2").MakeGenericType(typeof(string), typeMph).GetMethod(
+                        "Clear",
+                        BindingFlags.Public | BindingFlags.Instance)),
+                "ClearPropertyHandlerCache",
+                null).Compile();
+        }
+
+        /// <summary>
+        /// <para>Create delegate of compiled reflection result which clears decorator drawers from <see cref="MaterialProperty"/>.</para>
+        /// <para>Psudo-code of result lambda is following.</para>
+        /// <code>
+        /// (Shader shader, MaterialProperty prop) =>
+        /// {
+        ///     MaterialPropertyHandler mph = UnityEditor.MaterialPropertyHandler.GetHandler(shader, prop.name);
+        ///     if (mph is null)
+        ///     {
+        ///         return;
+        ///     }
+        ///     List&lt;MaterialPropertyDrawers&gt; decoratorDrawers = mph.m_DecoratorDrawers;
+        ///     if (decoratorDrawers is not null)
+        ///     {
+        ///         decoratorDrawers.Clear();
+        ///     }
+        /// };
+        /// </code>
+        /// </summary>
+        private static Action<Shader, MaterialProperty> CreateClearDecoratorDrawersDelegate()
+        {
+            // Get type of UnityEditor.MaterialPropertyHandler which is the internal class.
+            var typeMph = Assembly.GetAssembly(typeof(MaterialPropertyDrawer)).GetType("UnityEditor.MaterialPropertyHandler")
+                ?? throw new InvalidOperationException("Type not found: UnityEditor.MaterialPropertyHandler");
+
+            // Arguments
+            var pShader = Expression.Parameter(typeof(Shader), "shader");
+            var pMaterialProperty = Expression.Parameter(typeof(MaterialProperty), "mp");
+            var pDecoratorDrawers = Expression.Parameter(typeof(List<MaterialPropertyDrawer>), "decoratorDrawers");
+
+            // Constants
+            var cNull = Expression.Constant(null);
+
+            // Local variables
+            var pMaterialPropertyHandler = Expression.Parameter(typeMph, "mph");
+
+            // Labels
+            var returnTarget = Expression.Label();
+
+            return Expression.Lambda<Action<Shader, MaterialProperty>>(
+                Expression.Block(
+                    new[]
+                    {
+                        pMaterialPropertyHandler,
+                        pDecoratorDrawers
+                    },
+                    Expression.Assign(
+                        pMaterialPropertyHandler,
+                        Expression.Call(
+                            typeMph.GetMethod(
+                                "GetHandler",
+                                BindingFlags.NonPublic
+                                    | BindingFlags.Static)
+                                ?? throw new InvalidOperationException("MethodInfo not found: UnityEditor.MaterialPropertyHandler.GetHandler"),
+                            pShader,
+                            Expression.Property(
+                                pMaterialProperty,
+                                typeof(MaterialProperty).GetProperty(
+                                    "name",
+                                    BindingFlags.Public
+                                        | BindingFlags.Instance)))),
+                    Expression.IfThen(
+                        Expression.Equal(
+                            pMaterialPropertyHandler,
+                            cNull),
+                        Expression.Return(returnTarget)),
+                    Expression.Assign(
+                        pDecoratorDrawers,
+                        Expression.Field(
+                            pMaterialPropertyHandler,
+                            typeMph.GetField(
+                                "m_DecoratorDrawers",
+                                BindingFlags.NonPublic
+                                    | BindingFlags.Instance))),
+                    Expression.IfThen(
+                        Expression.NotEqual(
+                            pDecoratorDrawers,
+                            cNull),
+                        Expression.Call(
+                            pDecoratorDrawers,
+                            typeof(List<MaterialPropertyDrawer>).GetMethod(
+                                "Clear",
+                                BindingFlags.Public
+                                    | BindingFlags.Instance))),
+                    Expression.Label(returnTarget)),
+                "ClearDecoratorDrawers",
+                new []
+                {
+                    pShader,
+                    pMaterialProperty
+                }).Compile();
+        }
+
+
+        /// <summary>
+        /// <para>Create delegate of reflection results about UnityEditor.MaterialToggleUIDrawer.</para>
+        /// <code>
+        /// (Shader shader, MaterialProperty prop, bool isOn) =>
+        /// {
+        ///     MaterialPropertyHandler mph = UnityEditor.MaterialPropertyHandler.GetHandler(shader, prop.name);
+        ///     if (mph is null)
+        ///     {
+        ///         throw new ArgumentException("Specified MaterialProperty does not have UnityEditor.MaterialPropertyHandler");
+        ///     }
+        ///     MaterialToggleUIDrawer mpud = mph.propertyDrawer as MaterialToggleUIDrawer;
+        ///     if (mpud is null)
+        ///     {
+        ///         throw new ArgumentException("Specified MaterialProperty does not have UnityEditor.MaterialToggleUIDrawer");
+        ///     }
+        ///     mpud.SetKeyword(prop, isOn);
+        /// };
+        /// </code>
+        /// </summary>
+        private static Action<Shader, MaterialProperty, bool> CreateSetKeywordDelegate()
+        {
+            // Get assembly from public class.
+            var asm = Assembly.GetAssembly(typeof(MaterialPropertyDrawer));
+
+            // Get type of UnityEditor.MaterialPropertyHandler which is the internal class.
+            var typeMph = asm.GetType("UnityEditor.MaterialPropertyHandler")
+                ?? throw new InvalidOperationException("Type not found: UnityEditor.MaterialPropertyHandler");
+            var typeMtud = asm.GetType("UnityEditor.MaterialToggleUIDrawer")
+                ?? throw new InvalidOperationException("Type not found: UnityEditor.MaterialToggleUIDrawer");
+
+            var ciArgumentException = typeof(ArgumentException).GetConstructor(new[] {typeof(string)});
+
+            // Constants
+            var cNull = Expression.Constant(null);
+
+            // Arguments
+            var pShader = Expression.Parameter(typeof(Shader), "shader");
+            var pMaterialProperty = Expression.Parameter(typeof(MaterialProperty), "mp");
+            var pIsOn = Expression.Parameter(typeof(bool), "isOn");
+
+            // Local variables
+            var pMaterialPropertyHandler = Expression.Parameter(typeMph, "mph");
+            var pMaterialToggleUIDrawer = Expression.Parameter(typeMtud, "mtud");
+
+            return Expression.Lambda<Action<Shader, MaterialProperty, bool>>(
+                Expression.Block(
+                    new[]
+                    {
+                        pMaterialPropertyHandler,
+                        pMaterialToggleUIDrawer
+                    },
+                    Expression.Assign(
+                        pMaterialPropertyHandler,
+                        Expression.Call(
+                            typeMph.GetMethod(
+                                "GetHandler",
+                                BindingFlags.NonPublic
+                                    | BindingFlags.Static)
+                                ?? throw new InvalidOperationException("MethodInfo not found: UnityEditor.MaterialPropertyHandler.GetHandler"),
+                            pShader,
+                            Expression.Property(
+                                pMaterialProperty,
+                                typeof(MaterialProperty).GetProperty(
+                                    "name",
+                                    BindingFlags.GetProperty
+                                        | BindingFlags.Public
+                                        | BindingFlags.Instance)))),
+                    Expression.IfThen(
+                        Expression.Equal(
+                            pMaterialPropertyHandler,
+                            cNull),
+                        Expression.Throw(
+                            Expression.New(
+                                ciArgumentException,
+                                Expression.Constant("Specified MaterialProperty does not have UnityEditor.MaterialPropertyHandler")))),
+                    Expression.Assign(
+                        pMaterialToggleUIDrawer,
+                        Expression.TypeAs(
+                            Expression.Property(
+                                pMaterialPropertyHandler,
+                                typeMph.GetProperty(
+                                    "propertyDrawer",
+                                    BindingFlags.GetProperty
+                                        | BindingFlags.Public
+                                        | BindingFlags.Instance)
+                                    ?? throw new InvalidOperationException("PropertyInfo not found: UnityEditor.MaterialPropertyHandler.propertyDrawer")),
+                            typeMtud)),
+                    Expression.IfThen(
+                        Expression.Equal(
+                            pMaterialToggleUIDrawer,
+                            cNull),
+                        Expression.Throw(
+                            Expression.New(
+                                ciArgumentException,
+                                Expression.Constant("Specified MaterialProperty does not have UnityEditor.MaterialToggleUIDrawer")))),
+                    Expression.Call(
+                        pMaterialToggleUIDrawer,
+                        typeMtud.GetMethod(
+                            "SetKeyword",
+                            BindingFlags.NonPublic
+                                | BindingFlags.Instance)
+                            ?? throw new InvalidOperationException("MethodInfo not found: UnityEditor.MaterialToggleUIDrawer.SetKeyword"),
+                        pMaterialProperty,
+                        pIsOn)),
+                "ToggleKeyword",
+                new []
+                {
+                    pShader,
+                    pMaterialProperty,
+                    pIsOn
+                }).Compile();
+        }
+
+        /// <summary>
+        /// Configuration structure of Rendering Mode.
+        /// </summary>
+        private struct RenderingModeConfig
+        {
+            /// <summary>
+            /// Value of tag, "RenderType".
+            /// </summary>
+            public RenderType RenderType { get; }
+            /// <summary>
+            /// Value of "RenderQueue".
+            /// </summary>
+            public RenderQueue RenderQueue { get; }
+            /// <summary>
+            /// Value of property, "_AlphaTest".
+            /// </summary>
+            public bool IsAlphaTestEnabled { get; }
+            /// <summary>
+            /// Value of property, "_ZWrite".
+            /// </summary>
+            public bool IsZWriteEnabled { get; }
+            /// <summary>
+            /// Value of property, "_SrcBlend".
+            /// </summary>
+            public BlendMode SrcBlend { get; }
+            /// <summary>
+            /// Value of property, "_DstBlend".
+            /// </summary>
+            public BlendMode DstBlend { get; }
+            /// <summary>
+            /// Value of property, "_SrcBlendAlpha".
+            /// </summary>
+            public BlendMode SrcBlendAlpha { get; }
+            /// <summary>
+            /// Value of property, "_DstBlendAlpha".
+            /// </summary>
+            public BlendMode DstBlendAlpha { get; }
+            /// <summary>
+            /// Value of property, "_SrcBlendOp".
+            /// </summary>
+            public BlendOp BlendOp { get; }
+            /// <summary>
+            /// Value of property, "_DstBlendOp".
+            /// </summary>
+            public BlendOp BlendOpAlpha { get; }
+
+            /// <summary>
+            /// Initialize all member variables according to <paramref name="renderingMode"/>.
+            /// </summary>
+            /// <param name="renderingMode">Rendering mode.</param>
+            public RenderingModeConfig(RenderingMode renderingMode)
+            {
+                switch (renderingMode)
+                {
+                    case RenderingMode.Opaque:
+                        RenderType = RenderType.Opaque;
+                        RenderQueue = RenderQueue.Geometry;
+                        IsAlphaTestEnabled = false;
+                        IsZWriteEnabled = true;
+                        SrcBlend = BlendMode.One;
+                        DstBlend = BlendMode.Zero;
+                        SrcBlendAlpha = BlendMode.One;
+                        DstBlendAlpha = BlendMode.Zero;
+                        BlendOp = BlendOp.Add;
+                        BlendOpAlpha = BlendOp.Add;
+                        break;
+                    case RenderingMode.Cutout:
+                        RenderType = RenderType.TransparentCutout;
+                        RenderQueue = RenderQueue.AlphaTest;
+                        IsAlphaTestEnabled = true;
+                        IsZWriteEnabled = true;
+                        SrcBlend = BlendMode.One;
+                        DstBlend = BlendMode.Zero;
+                        SrcBlendAlpha = BlendMode.One;
+                        DstBlendAlpha = BlendMode.Zero;
+                        BlendOp = BlendOp.Add;
+                        BlendOpAlpha = BlendOp.Add;
+                        break;
+                    case RenderingMode.Fade:
+                        RenderType = RenderType.Transparent;
+                        RenderQueue = RenderQueue.Transparent;
+                        IsAlphaTestEnabled = false;
+                        IsZWriteEnabled = false;
+                        SrcBlend = BlendMode.SrcAlpha;
+                        DstBlend = BlendMode.OneMinusSrcAlpha;
+                        SrcBlendAlpha = BlendMode.SrcAlpha;
+                        DstBlendAlpha = BlendMode.OneMinusSrcAlpha;
+                        BlendOp = BlendOp.Add;
+                        BlendOpAlpha = BlendOp.Add;
+                        break;
+                    case RenderingMode.Transparent:
+                        RenderType = RenderType.Transparent;
+                        RenderQueue = RenderQueue.Transparent;
+                        IsAlphaTestEnabled = false;
+                        IsZWriteEnabled = false;
+                        SrcBlend = BlendMode.One;
+                        DstBlend = BlendMode.OneMinusSrcAlpha;
+                        SrcBlendAlpha = BlendMode.One;
+                        DstBlendAlpha = BlendMode.OneMinusSrcAlpha;
+                        BlendOp = BlendOp.Add;
+                        BlendOpAlpha = BlendOp.Add;
+                        break;
+                    case RenderingMode.Additive:
+                        RenderType = RenderType.Transparent;
+                        RenderQueue = RenderQueue.Transparent;
+                        IsAlphaTestEnabled = false;
+                        IsZWriteEnabled = false;
+                        SrcBlend = BlendMode.SrcAlpha;
+                        DstBlend = BlendMode.One;
+                        SrcBlendAlpha = BlendMode.SrcAlpha;
+                        DstBlendAlpha = BlendMode.One;
+                        BlendOp = BlendOp.Add;
+                        BlendOpAlpha = BlendOp.Add;
+                        break;
+                    case RenderingMode.Multiply:
+                        RenderType = RenderType.Transparent;
+                        RenderQueue = RenderQueue.Transparent;
+                        IsAlphaTestEnabled = false;
+                        IsZWriteEnabled = false;
+                        SrcBlend = BlendMode.DstColor;
+                        DstBlend = BlendMode.Zero;
+                        SrcBlendAlpha = BlendMode.DstColor;
+                        DstBlendAlpha = BlendMode.Zero;
+                        BlendOp = BlendOp.Add;
+                        BlendOpAlpha = BlendOp.Add;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(renderingMode), renderingMode, null);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Editor UI mode.
+    /// </summary>
+    public enum EditorMode
+    {
+        /// <summary>
+        /// Show properties with rich UI.
+        /// </summary>
+        Custom,
+        /// <summary>
+        /// Show all properties with default UI.
+        /// </summary>
+        Default
+    }
+
+    /// <summary>
+    /// Render Type.
+    /// </summary>
+    /// <remarks>
+    /// <seealso href="https://docs.unity3d.com/Manual/SL-ShaderReplacement.html"/>
+    /// </remarks>
+    public enum RenderType
+    {
+        /// <summary>
+        /// Most of the shaders (Normal, Self Illuminated, Reflective, terrain shaders).
+        /// </summary>
+        Opaque,
+        /// <summary>
+        /// Most semitransparent shaders (Transparent, Particle, Font, terrain additive pass shaders).
+        /// </summary>
+        Transparent,
+        /// <summary>
+        /// Masked transparency shaders (Transparent Cutout, two pass vegetation shaders).
+        /// </summary>
+        TransparentCutout,
+        /// <summary>
+        /// Skybox shaders.
+        /// </summary>
+        Background,
+        /// <summary>
+        /// GUITexture, Halo, Flare shaders.
+        /// </summary>
+        Overlay,
+        /// <summary>
+        /// Terrain engine tree bark.
+        /// </summary>
+        TreeOpaque,
+        /// <summary>
+        /// Terrain engine tree leaves.
+        /// </summary>
+        TreeTransparentCutout,
+        /// <summary>
+        /// Terrain engine billboarded trees.
+        /// </summary>
+        TreeBillboard,
+        /// <summary>
+        /// Terrain engine grass.
+        /// </summary>
+        Grass,
+        /// <summary>
+        /// Terrain engine billboarded grass.
+        /// </summary>
+        GrassBillboard
+    }
+
+    /// <summary>
+    /// Rendering Mode.
+    /// </summary>
+    public enum RenderingMode
+    {
+        /// <summary>
+        /// Suitable for normal solid objects with no transparent areas.
+        /// </summary>
+        Opaque,
+        /// <summary>
+        /// Allows you to create a transparent effect that has hard edges between the opaque and transparent areas.
+        /// </summary>
+        Cutout,
+        /// <summary>
+        /// Allows the transparency values to entirely fade an object out, including any specular highlights or reflections it may have.
+        /// </summary>
+        Fade,
+        /// <summary>
+        /// Suitable for rendering realistic transparent materials such as clear plastic or glass.
+        /// </summary>
+        Transparent,
+        /// <summary>
+        /// Suitable for additive rendering.
+        /// </summary>
+        Additive,
+        /// <summary>
+        /// Suitable for multiply rendering.
+        /// </summary>
+        Multiply,
+        /// <summary>
+        /// Custom rendering mode.
+        /// </summary>
+        Custom
+    }
+
+    /// <summary>
+    /// Lighting methods.
+    /// </summary>
+    public enum LightingMethod
+    {
+        /// <summary>
+        /// Lighting with Lambert Reflection Model.
+        /// </summary>
+        UnityLambert = 0,
+        /// <summary>
+        /// Lighting with Blinn-Phong Reflection Model.
+        /// </summary>
+        UnityBlinnPhong = 1,
+        /// <summary>
+        /// Lighting with Unity PBS.
+        /// </summary>
+        UnityStandard = 2,
+        /// <summary>
+        /// Lighting with Unity PBS Specular.
+        /// </summary>
+        UnityStandardSpecular = 3,
+        /// <summary>
+        /// No lighting.
+        /// </summary>
+        Unlit = 4,
+        /// <summary>
+        /// Lighting with custom method.
+        /// </summary>
+        Custom = 5
+    }
+
+    /// <summary>
+    /// Culling types of "VRCFallback".
+    /// </summary>
+    /// <remarks>
+    /// <seealso href="https://docs.vrchat.com/docs/shader-fallback-system"/>
+    /// </remarks>
+    public enum VRCFallbackCullType
+    {
+        /// <summary>
+        /// Same as <see cref="VRCFallbackCullType.Default"/>.
+        /// </summary>
+        None,
+        /// <summary>
+        /// Back face culling.
+        /// </summary>
+        Default,
+        /// <summary>
+        /// No culling.
+        /// </summary>
+        DoubleSided
+    }
+
+    /// <summary>
+    /// Rendering types of "VRCFallback".
+    /// </summary>
+    /// <remarks>
+    /// <seealso href="https://docs.vrchat.com/docs/shader-fallback-system"/>
+    /// </remarks>
+    public enum VRCFallbackRenderType
+    {
+        /// <summary>
+        /// Same as <see cref="VRCFallbackRenderType.Opaque"/> but no string is added to the tag value.
+        /// </summary>
+        None,
+        /// <summary>
+        /// Opaque rendering.
+        /// </summary>
+        Opaque,
+        /// <summary>
+        /// Cutout rendering.
+        /// </summary>
+        Cutout,
+        /// <summary>
+        /// Transparent rendering.
+        /// </summary>
+        Transparent,
+        /// <summary>
+        /// Fade rendering.
+        /// </summary>
+        Fade
+    }
+
+    /// <summary>
+    /// Shader types of "VRCFallback".
+    /// </summary>
+    /// <remarks>
+    /// <seealso href="https://docs.vrchat.com/docs/shader-fallback-system"/>
+    /// </remarks>
+    public enum VRCFallbackShaderType
+    {
+        /// <summary>
+        /// Unlit shader.
+        /// </summary>
+        Unlit,
+        /// <summary>
+        /// Standard shader.
+        /// </summary>
+        Standard,
+        /// <summary>
+        /// VertexLit shader.
+        /// </summary>
+        VertexLit,
+        /// <summary>
+        /// Toon shader.
+        /// </summary>
+        Toon,
+        /// <summary>
+        /// Particle shader.
+        /// </summary>
+        Particle,
+        /// <summary>
+        /// Sprite shader.
+        /// </summary>
+        Sprite,
+        /// <summary>
+        /// Matcap shader.
+        /// </summary>
+        Matcap,
+        /// <summary>
+        /// MobileToon shader.
+        /// </summary>
+        MobileToon,
+        /// <summary>
+        /// Hide the mesh from view, useful for things like raymarching effects.
+        /// </summary>
+        Hidden
+    }
+}
