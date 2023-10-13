@@ -162,7 +162,7 @@ namespace Custom
         /// </summary>
         private static Func<Shader, string, string> _clearDecoratorDrawers;
         /// <summary>
-        /// Cache of compiled reflection result of <see cref="CreateToggleKeywordDelegate"/>
+        /// Cache of compiled reflection result of <see cref="CreateSetKeywordDelegate"/>.
         /// </summary>
         private static Action<Shader, MaterialProperty, bool> _toggleKeyword;
 
@@ -316,7 +316,7 @@ namespace Custom
         /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
         /// <param name="propName">Name of shader property.</param>
         /// <param name="isMandatory">If <c>true</c> then this method will throw an exception
-        /// if a property with <<paramref name="propName"/> was not found.</param>
+        /// if a property with <paramref name="propName"/> was not found.</param>
         protected static void ShaderProperty(MaterialEditor me, MaterialProperty[] mps, string propName, bool isMandatory = true)
         {
             var prop = FindProperty(propName, mps, isMandatory);
@@ -346,7 +346,7 @@ namespace Custom
         /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
         /// <param name="propName">Name of shader property.</param>
         /// <param name="isMandatory">If <c>true</c> then this method will throw an exception
-        /// if a property with <<paramref name="propName"/> was not found.</param>
+        /// if a property with <paramref name="propName"/> was not found.</param>
         /// <return>Found property.</return>
         protected static MaterialProperty FindAndDrawProperty(MaterialEditor me, MaterialProperty[] mps, string propName, bool isMandatory = true)
         {
@@ -365,7 +365,7 @@ namespace Custom
         /// <param name="propNames">Names of shader property.</param>
         /// <param name="mps"><see cref="MaterialProperty"/> array.</param>
         /// <param name="isMandatory">If <c>true</c> then this method will throw an exception
-        /// if one of properties with <<paramref name="propNames"/> was not found.</param>
+        /// if one of properties with <paramref name="propNames"/> was not found.</param>
         /// <return>Found properties.</return>
         protected static List<MaterialProperty> FindProperties(string[] propNames, MaterialProperty[] mps, bool isMandatory = true)
         {
@@ -452,7 +452,7 @@ namespace Custom
 
             foreach (var material in me.targets.Cast<Material>())
             {
-                // SetRenderTypeTag(material, config.RenderType);
+                SetRenderTypeTag(material, config.RenderType);
                 SetRenderQueue(material, config.RenderQueue);
             }
 
@@ -677,7 +677,7 @@ namespace Custom
         /// Set render queue value if the value is differ from the default.
         /// </summary>
         /// <param name="material">Target material.</param>
-        /// <param name="renderQueue"><see cref="RenderQueue"/> to set.</param>
+        /// <param name="renderType"><see cref="RenderQueue"/> to set.</param>
         private static void SetRenderTypeTag(Material material, RenderType renderType)
         {
             // Set to default and get the default.
