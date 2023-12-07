@@ -22,8 +22,6 @@ Shader "Custom/#SCRIPTNAME#"
 
         _MaxRayLength ("Maximum length of the ray", Float) = 1000.0
 
-        _MarchingFactor ("Marching Factor", Range(0.5, 1.0)) = 1.0
-
         _Scales ("Scale vector", Vector) = (1.0, 1.0, 1.0, 1.0)
 
         [KeywordEnum(Object, World)]
@@ -37,6 +35,17 @@ Shader "Custom/#SCRIPTNAME#"
 
         // e.g.) 1.7321 (~= sqrt(3.0)) for default cube (1x1x1 cube).
         _MaxInsideLength ("Maximum length inside the object", Float) = 1000.0
+
+        [KeywordEnum(Normal, Over Relax, Accelaration, Auto Relax)]
+        _StepMethod ("Marching step method", Int) = 0
+
+        _MarchingFactor ("Marching Factor", Range(0.5, 1.0)) = 1.0
+
+        _OverRelaxFactor ("Marching Factor for Over Relaxation Sphere Tracing", Range(1.0, 2.0)) = 1.2
+
+        _AccelarationFactor ("Coeeficient of Accelarating Sphere Tracing", Range(0.0, 1.0)) = 0.8
+
+        _AutoRelaxFactor ("Coeeficient of Auto Step Size Relaxation", Range(0.0, 1.0)) = 0.8
 
 
         // ------------------------------------------------------------
@@ -193,6 +202,7 @@ Shader "Custom/#SCRIPTNAME#"
         #pragma shader_feature_local _CLIPLENGTHMODE_USE_PROPERTY_VALUE _CLIPLENGTHMODE_CAMERA_CLIP _CLIPLENGTHMODE_DEPTH_TEXTURE
         #pragma shader_feature_local_fragment _CULL_OFF _CULL_FRONT _CULL_BACK
         #pragma shader_feature_local_fragment _ _NODEPTH_ON
+        #pragma shader_feature_local_fragment _STEPMETHOD_NORMAL _STEPMETHOD_OVER_RELAX _STEPMETHOD_ACCELARATION _STEPMETHOD_AUTO_RELAX
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
 
         #define OPTIMIZE_BOX_PROJECTION 1
@@ -220,12 +230,18 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float _MinRayLength;
         //! Maximum length of the ray.
         uniform float _MaxRayLength;
-        //! Marching Factor.
-        uniform float _MarchingFactor;
         //! Scale vector.
         uniform float3 _Scales;
         //! Maximum length inside the object.
         uniform float _MaxInsideLength;
+        //! Marching Factor.
+        uniform float _MarchingFactor;
+        //! Marching Factor for Over Relaxation Sphere Tracing.
+        uniform float _OverRelaxFactor;
+        //! Coeeficient of Accelarating Sphere Tracing.
+        uniform float _AccelarationFactor;
+        //! Coeeficient of Auto Step Size Relaxation.
+        uniform float _AutoRelaxFactor;
 
         //! Color of the objects.
         uniform float4 _Color;
@@ -585,18 +601,79 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(UNITY_PASS_FORWARDBASE)
             const float3 rcpScales = rcp(_Scales);
             const float3 rayDirVec = rp.rayDir * rcpScales;
-            const float marchingFactor = _MarchingFactor * rsqrt(dot(rayDirVec, rayDirVec));
 
             rmout ro;
             ro.rayLength = rp.initRayLength;
             ro.isHit = false;
 
-            // Loop of Ray Marching.
+            const float3 rayOrigin = rp.rayOrigin * rcpScales;
+
+        #if defined(_STEPMETHOD_OVER_RELAX)
+            // https://www.researchgate.net/publication/370902411_Automatic_Step_Size_Relaxation_in_Sphere_Tracing
+            const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
+            float r = 0.0;
+            float d = 0.0;
             for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > rp.maxRayLength) ? 0x7fffffff : i + 1) {
-                const float d = map((rp.rayOrigin + rp.rayDir * ro.rayLength) * rcpScales);
+                const float nextRayLength = ro.rayLength + d * marchingFactor;
+                const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
+                if (d <= r + abs(nextR)) {
+                    d = _OverRelaxFactor * nextR;
+                    ro.rayLength = nextRayLength;
+                    r = nextR;
+                } else {
+                    d = r;
+                }
+                ro.isHit = abs(r) < _MinRayLength;
+            }
+        #elif defined(_STEPMETHOD_ACCELARATION)
+            // https://www.researchgate.net/publication/331547302_Accelerating_Sphere_Tracing
+            // https://www.researchgate.net/publication/329152815_Accelerating_Sphere_Tracing
+            const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
+            float r = map(rayOrigin + rayDirVec * ro.rayLength);
+            float d = r;
+
+            for (int i = 0; r > _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && i < maxLoop; i++) {
+                const float nextRayLength = ro.rayLength + d * marchingFactor;
+                const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
+                if (d <= r + abs(nextR)) {
+                    const float deltaR = nextR - r;
+                    const float2 zr = d.xx + deltaR * float2(1.0, -1.0);
+                    d = nextR + _AccelarationFactor * nextR * (zr.x / zr.y);
+                    ro.rayLength = nextRayLength;
+                    r = nextR;
+                } else {
+                    d = r;
+                }
+            }
+            ro.isHit = abs(r) < _MinRayLength;
+        #elif defined(_STEPMETHOD_AUTO_RELAX)
+            // https://www.researchgate.net/publication/370902411_Automatic_Step_Size_Relaxation_in_Sphere_Tracing
+            const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
+            float r = map(rayOrigin + rayDirVec * ro.rayLength);
+            float d = r;
+            float m = -1.0;
+
+            for (int i = 0; r > _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && i < maxLoop; i++) {
+                const float nextRayLength = ro.rayLength + d * marchingFactor;
+                const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
+                if (d <= r + abs(nextR)) {
+                    m = lerp(m, (nextR - r) / d, _AutoRelaxFactor);
+                    ro.rayLength = nextRayLength;
+                    r = nextR;
+                } else {
+                    m = -1.0;
+                }
+                d = 2.0 * r / (1.0 - m);
+            }
+            ro.isHit = r < _MinRayLength;
+        #else  // Assume: _STEPMETHOD_NORMAL
+            const float marchingFactor = _MarchingFactor * rsqrt(dot(rayDirVec, rayDirVec));
+            for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > rp.maxRayLength) ? 0x7fffffff : i + 1) {
+                const float d = map(rayOrigin + rayDirVec * ro.rayLength);
                 ro.rayLength += d * marchingFactor;
                 ro.isHit = d < _MinRayLength;
             }
+        #endif
 
             return ro;
         }
