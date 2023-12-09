@@ -47,6 +47,14 @@ Shader "Custom/#SCRIPTNAME#"
 
         _AutoRelaxFactor ("Coeeficient of Auto Step Size Relaxation", Range(0.0, 1.0)) = 0.8
 
+        [KeywordEnum(None, Step, Ray Length)]
+        _DebugView ("Debug view mode", Int) = 0
+
+        [IntRange]
+        _DebugStepDiv ("Divisor of number of ray steps for debug view", Range(1, 1024)) = 24
+
+        _DebugRayLengthDiv ("Divisor of number of ray length for debug view", Range(0.01, 1000.0)) = 5.0
+
 
         // ------------------------------------------------------------
         [Header(SDF Parameters)]
@@ -203,6 +211,7 @@ Shader "Custom/#SCRIPTNAME#"
         #pragma shader_feature_local_fragment _CULL_OFF _CULL_FRONT _CULL_BACK
         #pragma shader_feature_local_fragment _ _NODEPTH_ON
         #pragma shader_feature_local_fragment _STEPMETHOD_NORMAL _STEPMETHOD_OVER_RELAX _STEPMETHOD_ACCELARATION _STEPMETHOD_AUTO_RELAX
+        #pragma shader_feature_local_fragment _DEBUGVIEW_NONE _DEBUGVIEW_STEP _DEBUGVIEW_RAY_LENGTH
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
 
         #define OPTIMIZE_BOX_PROJECTION 1
@@ -242,6 +251,10 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float _AccelarationFactor;
         //! Coeeficient of Auto Step Size Relaxation.
         uniform float _AutoRelaxFactor;
+        //! Divisor of number of ray steps for debug view.
+        uniform float _DebugStepDiv;
+        //! Divisor of number of ray length for debug view.
+        uniform float _DebugRayLengthDiv;
 
         //! Color of the objects.
         uniform float4 _Color;
@@ -367,6 +380,8 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Length of the ray.
             float rayLength;
+            //! Number of ray steps.
+            int rayStep;
             //! A flag whether the ray collided with an object or not.
             bool isHit;
         };
@@ -473,9 +488,11 @@ Shader "Custom/#SCRIPTNAME#"
 
             const rayparam rp = calcRayParam(fi, _MaxRayLength, _MaxInsideLength, isFace);
             const rmout ro = rayMarch(rp);
+        #if !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
             if (!ro.isHit) {
                 discard;
             }
+        #endif  // !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
 
         #ifdef _CALCSPACE_WORLD
             const float3 worldFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
@@ -513,7 +530,13 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_APPLY_FOG(clipPos.z, color);
 
             fout fo;
+        #if defined(_DEBUGVIEW_STEP)
+            fo.color = float4((ro.rayStep / _DebugStepDiv).xxx, 1.0);
+        #elif defined(_DEBUGVIEW_RAY_LENGTH)
+            fo.color = float4((ro.rayLength / _DebugRayLengthDiv).xxx, 1.0);
+        #else
             fo.color = color;
+        #endif  // defined(_DEBUGVIEW_STEP)
         #ifndef _NODEPTH_ON
             fo.depth = getDepth(clipPos);
         #endif  // !defined(_NODEPTH_ON)
@@ -611,9 +634,9 @@ Shader "Custom/#SCRIPTNAME#"
         #if defined(_STEPMETHOD_OVER_RELAX)
             // https://www.researchgate.net/publication/370902411_Automatic_Step_Size_Relaxation_in_Sphere_Tracing
             const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
-            float r = 0.0;
+            float r = asfloat(0x7f800000);  // +inf
             float d = 0.0;
-            for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > rp.maxRayLength) ? 0x7fffffff : i + 1) {
+            for (ro.rayStep = 0; abs(r) >= _MinRayLength && ro.rayLength < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -623,8 +646,8 @@ Shader "Custom/#SCRIPTNAME#"
                 } else {
                     d = r;
                 }
-                ro.isHit = abs(r) < _MinRayLength;
             }
+            ro.isHit = abs(r) < _MinRayLength;
         #elif defined(_STEPMETHOD_ACCELARATION)
             // https://www.researchgate.net/publication/331547302_Accelerating_Sphere_Tracing
             // https://www.researchgate.net/publication/329152815_Accelerating_Sphere_Tracing
@@ -632,7 +655,7 @@ Shader "Custom/#SCRIPTNAME#"
             float r = map(rayOrigin + rayDirVec * ro.rayLength);
             float d = r;
 
-            for (int i = 0; r > _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && i < maxLoop; i++) {
+            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -653,7 +676,7 @@ Shader "Custom/#SCRIPTNAME#"
             float d = r;
             float m = -1.0;
 
-            for (int i = 0; r > _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && i < maxLoop; i++) {
+            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -668,11 +691,12 @@ Shader "Custom/#SCRIPTNAME#"
             ro.isHit = r < _MinRayLength;
         #else  // Assume: _STEPMETHOD_NORMAL
             const float marchingFactor = _MarchingFactor * rsqrt(dot(rayDirVec, rayDirVec));
-            for (int i = 0; i < maxLoop; i = (ro.isHit || ro.rayLength > rp.maxRayLength) ? 0x7fffffff : i + 1) {
-                const float d = map(rayOrigin + rayDirVec * ro.rayLength);
+            float d = asfloat(0x7f800000);  // +inf
+            for (ro.rayStep = 0; d >= _MinRayLength && ro.rayLength < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+                d = map(rayOrigin + rayDirVec * ro.rayLength);
                 ro.rayLength += d * marchingFactor;
-                ro.isHit = d < _MinRayLength;
             }
+            ro.isHit = d < _MinRayLength;
         #endif
 
             return ro;
