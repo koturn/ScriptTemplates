@@ -34,7 +34,7 @@ Shader "Custom/#SCRIPTNAME#"
         _AssumeInside ("Assume render target is inside object", Int) = 0
 
         // e.g.) 1.7321 (~= sqrt(3.0)) for default cube (1x1x1 cube).
-        _MaxInsideLength ("Maximum length inside the object", Float) = 1000.0
+        _MaxInsideLength ("Maximum length inside the object", Float) = 1.7321
 
         [KeywordEnum(Normal, Over Relax, Accelaration, Auto Relax)]
         _StepMethod ("Marching step method", Int) = 0
