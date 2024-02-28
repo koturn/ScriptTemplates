@@ -555,7 +555,11 @@ Shader "Custom/#SCRIPTNAME#"
         {
             rayparam rp;
 
+        #ifdef _CALCSPACE_WORLD
+            rp.rayOrigin = _WorldSpaceCameraPos;
+        #else
             rp.rayOrigin = fi.cameraPos;
+        #endif  // defined(_CALCSPACE_WORLD)
             rp.rayDir = normalize(fi.rayDirVec);
 
         #if !defined(_CLIPLENGTHMODE_CAMERA_CLIP) && !defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
