@@ -314,27 +314,28 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Clip space position of the vertex.
             float4 pos : SV_POSITION;
-            //! Unnormalized ray direction in object/world space.
+        #if defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+            //! Object/World space position of the fragment.
+            float3 fragPos : TEXCOORD0;
+        #else
+            //! Unnormalized ray direction in object space.
             float3 rayDirVec : TEXCOORD0;
+        #endif  // defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
         #ifndef _CALCSPACE_WORLD
             //! Camera position in object space. (for pre-calulation on vertex shader)
             nointerpolation float3 cameraPos : TEXCOORD1;
         #endif  // !defined(_CALCSPACE_WORLD)
-        #if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
-            //! Object/World space position of the fragment.
-            float3 fragPos : TEXCOORD2;
-        #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
         #ifdef _CLIPLENGTHMODE_DEPTH_TEXTURE
-            float4 screenPos : TEXCOORD3;
+            float4 screenPos : TEXCOORD2;
         #endif  // defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
-            UNITY_LIGHTING_COORDS(4, 5)
+            UNITY_LIGHTING_COORDS(3, 4)
         #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
             //! Lightmap and Dynamic Lightmap coordinate.
-            float4 lmap: TEXCOORD6;
+            float4 lmap: TEXCOORD5;
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             //! Ambient light color.
-            half3 ambient: TEXCOORD7;
+            half3 ambient: TEXCOORD6;
         #endif  // defined(LIGHTMAP_ON)
             //! Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -425,17 +426,16 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
         #ifdef _CALCSPACE_WORLD
-            const float3 vertPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-            o.rayDirVec = vertPos - _WorldSpaceCameraPos;
+            o.fragPos = mul(unity_ObjectToWorld, v.vertex).xyz;
         #else
             const float3 vertPos = v.vertex.xyz;
             o.cameraPos = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
-            o.rayDirVec = vertPos - o.cameraPos;
-        #endif  // defined(_CALCSPACE_WORLD)
-
-        #if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             o.fragPos = vertPos;
-        #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #    else
+            o.rayDirVec = vertPos - o.cameraPos;
+        #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #endif  // defined(_CALCSPACE_WORLD)
 
         #ifdef LIGHTMAP_ON
             o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
@@ -557,10 +557,16 @@ Shader "Custom/#SCRIPTNAME#"
 
         #ifdef _CALCSPACE_WORLD
             rp.rayOrigin = _WorldSpaceCameraPos;
+            const float3 rayDirVec = fi.fragPos - _WorldSpaceCameraPos;
         #else
             rp.rayOrigin = fi.cameraPos;
+        #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+            const float3 rayDirVec = fi.fragPos - fi.cameraPos;
+        #    else
+            const float3 rayDirVec = fi.rayDirVec;
+        #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
         #endif  // defined(_CALCSPACE_WORLD)
-            rp.rayDir = normalize(fi.rayDirVec);
+            rp.rayDir = normalize(rayDirVec);
 
         #if !defined(_CLIPLENGTHMODE_CAMERA_CLIP) && !defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
             const float2 clipRayLengths = float2(0.0, maxRayLength);
@@ -591,7 +597,7 @@ Shader "Custom/#SCRIPTNAME#"
         #    ifdef _CALCSPACE_WORLD
             maxInsideLength = maxInsideLength / length(mul((float3x3)unity_WorldToObject, rp.rayDir));
         #    endif  // defined(_CALCSPACE_WORLD)
-            const float rayDirVecLength = length(fi.rayDirVec);
+            const float rayDirVecLength = length(rayDirVec);
             const float3 startPos = fi.fragPos - (isFace ? float3(0.0, 0.0, 0.0) : min(rayDirVecLength, maxInsideLength) * rp.rayDir);
             rp.initRayLength = max(clipRayLengths.x, length(startPos - rp.rayOrigin));
             rp.maxRayLength = min(clipRayLengths.y, rayDirVecLength + (isFace ? maxInsideLength : 0.0));
@@ -601,7 +607,7 @@ Shader "Custom/#SCRIPTNAME#"
             // Front  | Surface of the mesh       | `clipRayLengths.y`
             // Back   | Camera                    | Distance from camera to mesh
             rp.initRayLength = isFace ? max(clipRayLengths.x, length(fi.fragPos - rp.rayOrigin)) : clipRayLengths.x;
-            rp.maxRayLength = isFace ? clipRayLengths.y : length(fi.rayDirVec);
+            rp.maxRayLength = isFace ? clipRayLengths.y : length(rayDirVec);
         #else
             rp.initRayLength = clipRayLengths.x;
             rp.maxRayLength = clipRayLengths.y;
