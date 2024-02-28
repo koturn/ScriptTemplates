@@ -68,7 +68,7 @@ Shader "Custom/#SCRIPTNAME#"
         [Space(8)]
 
         [KeywordEnum(Unity Lambert, Unity Blinn Phong, Unity Standard, Unity Standard Specular, Unlit, Custom)]
-        _Lighting ("Lighting method", Int) = 0
+        _Lighting ("Lighting method", Int) = 2
 
         _Glossiness ("Smoothness", Range(0.0, 1.0)) = 0.5
         _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
@@ -86,7 +86,7 @@ Shader "Custom/#SCRIPTNAME#"
 
         // [Enum(UnityEngine.Rendering.CullMode)]
         [KeywordEnum(Off, Front, Back)]
-        _Cull ("Culling Mode", Int) = 2  // Default: Back
+        _Cull ("Culling Mode", Int) = 1  // Default: Front
 
         // [HideInInspector]
         // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
