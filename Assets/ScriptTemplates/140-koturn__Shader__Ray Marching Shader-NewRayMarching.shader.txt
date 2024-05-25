@@ -815,6 +815,14 @@ Shader "Custom/#SCRIPTNAME#"
          */
         half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient)
         {
+            // Uniform variable requirements:
+            //
+            // Variant                             | `_Glossiness` | `_Metallic` | `_SpecColor` | `_SpecPower`
+            // ------------------------------------|---------------|-------------|--------------|-------------
+            // `_LIGHTING_UNITY_LAMBERT`           |               |             |              |
+            // `_LIGHTING_UNITY_BLINN_PHONG`       | o             |             | o            | o
+            // `_LIGHTING_UNITY_STANDARD`          | o             | o           |              |
+            // `_LIGHTING_UNITY_STANDARD_SPECULAR` | o             |             | o            |
         #if defined(_LIGHTING_UNITY_STANDARD)
         #    define LightingUnity_GI(so, giInput, gi) LightingStandard_GI(so, giInput, gi)
         #    define LightingUnity(so, worldViewDir, gi) LightingStandard(so, worldViewDir, gi)
@@ -1331,6 +1339,14 @@ Shader "Custom/#SCRIPTNAME#"
              */
             half4 calcLightingUnityDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal)
             {
+                // Uniform variable requirements:
+                //
+                // Variant                             | `_Glossiness` | `_Metallic` | `_SpecColor` | `_SpecPower`
+                // ------------------------------------|---------------|-------------|--------------|-------------
+                // `_LIGHTING_UNITY_LAMBERT`           |               |             |              |
+                // `_LIGHTING_UNITY_BLINN_PHONG`       | o             |             | o            | o
+                // `_LIGHTING_UNITY_STANDARD`          | o             | o           |              |
+                // `_LIGHTING_UNITY_STANDARD_SPECULAR` | o             |             | o            |
             #if defined(_LIGHTING_UNITY_STANDARD)
             #    define LightingUnity_GI(so, giInput, gi) LightingStandard_GI(so, giInput, gi)
             #    define LightingUnity_Deferred(so, worldViewDir, gi, diffuse, specular, normal) LightingStandard_Deferred(so, worldViewDir, gi, diffuse, specular, normal)
