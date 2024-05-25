@@ -628,6 +628,8 @@ Shader "Custom/#SCRIPTNAME#"
             const int maxLoop = _MaxLoop;
         #elif defined(UNITY_PASS_FORWARDADD)
             const int maxLoop = _MaxLoopForwardAdd;
+        #elif defined(UNITY_PASS_DEFERRED)
+            const int maxLoop = _MaxLoop;
         #elif defined(UNITY_PASS_SHADOWCASTER)
             const int maxLoop = _MaxLoopShadowCaster;
         #endif  // defined(UNITY_PASS_FORWARDBASE)
@@ -924,16 +926,21 @@ Shader "Custom/#SCRIPTNAME#"
         {
             UnityGI gi;
             UNITY_INITIALIZE_OUTPUT(UnityGI, gi);
-        #ifdef UNITY_PASS_FORWARDBASE
+
+        #if defined(UNITY_PASS_FORWARDBASE)
             gi.light.color = _LightColor0.rgb;
+        #elif defined(UNITY_PASS_DEFERRED)
+            gi.light.color = half3(0.0, 0.0, 0.0);
         #else
             gi.light.color = _LightColor0.rgb * atten;
         #endif  // defined(UNITY_PASS_FORWARDBASE)
-        #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+        #if defined(UNITY_PASS_DEFERRED)
+            gi.light.dir = half3(0.0, 1.0, 0.0);
+        #elif defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
             gi.light.dir = UnityWorldSpaceLightDir(worldPos);
         #else
             gi.light.dir = normalize(UnityWorldSpaceLightDir(worldPos));
-        #endif  // defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+        #endif  // defined(UNITY_PASS_DEFERRED)
             // gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
             // gi.indirect.specular = half3(0.0, 0.0, 0.0);
 
@@ -1140,6 +1147,294 @@ Shader "Custom/#SCRIPTNAME#"
             }
             #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
             #endif  // defined(_NOFORWARDADD_ON) || defined(_DEBUGVIEW_STEP) || defined(_DEBUGVIEW_RAY_LENGTH) || defined(_LIGHTING_UNLIT)
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "DEFERRED"
+            Tags
+            {
+                "LightMode" = "Deferred"
+            }
+
+            Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
+            ZWrite [_ZWrite]
+
+            CGPROGRAM
+            #pragma exclude_renderers nomrt
+            #pragma multi_compile_prepassfinal
+            #pragma shader_feature_local_fragment _DEBUGVIEW_NONE _DEBUGVIEW_STEP _DEBUGVIEW_RAY_LENGTH
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
+
+            #pragma vertex vert
+            #pragma fragment fragDeferred
+
+            /*!
+             * @brief G-Buffer data which is output of fragDeferred.
+             * @see fragDeferred
+             */
+            struct GBuffer
+            {
+                //! Diffuse and occlustion. (rgb: diffuse, a: occlusion)
+                half4 diffuse : SV_Target0;
+                //! Specular and smoothness. (rgb: specular, a: smoothness)
+                half4 specular : SV_Target1;
+                //! Normal. (rgb: normal, a: unused)
+                half4 normal : SV_Target2;
+                //! Emission. (rgb: emission, a: unused)
+                half4 emission : SV_Target3;
+            #if !defined(_NODEPTH_ON)
+                //! Depth of the pixel.
+                float depth : SV_Depth;
+            #endif  // !defined(_NODEPTH_ON)
+            };
+
+
+            half4 calcLightingDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal);
+            half4 calcLightingUnityDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal);
+            half4 calcLightingCustomDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal);
+
+
+            #if !defined(_CULL_FRONT) && !defined(_CULL_BACK) && (defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH))
+            /*!
+            * @brief Fragment shader function.
+            * @param [in] fi  Input data from vertex shader.
+            * @param [in] facing  Facing parameter.
+            * @return G-Buffer data.
+            */
+            GBuffer fragDeferred(v2f fi, face_t facing : FACE_SEMANTICS)
+            #else
+            /*!
+            * @brief Fragment shader function.
+            * @param [in] fi  Input data from vertex shader.
+            * @return G-Buffer data.
+            */
+            GBuffer fragDeferred(v2f fi)
+            #endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+            {
+                UNITY_SETUP_INSTANCE_ID(fi);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+            #if defined(_CULL_FRONT)
+                static const bool isFace = false;
+            #elif defined(_CULL_BACK)
+                static const bool isFace = true;
+            #elif defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+                const bool isFace = isFacing(facing);
+            #else
+                static const bool isFace = true;  // Unused.
+            #endif  // defined(_CULL_FRONT)
+
+                const rayparam rp = calcRayParam(fi, _MaxRayLength, _MaxInsideLength, isFace);
+                const rmout ro = rayMarch(rp);
+            #if !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
+                if (!ro.isHit) {
+                    discard;
+                }
+            #endif  // !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
+
+            #ifdef _CALCSPACE_WORLD
+                const float3 worldFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
+                const float3 worldNormal = calcNormal(worldFinalPos);
+            #else
+                const float3 localFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
+                const float3 worldFinalPos = mul(unity_ObjectToWorld, float4(localFinalPos, 1.0)).xyz;
+                const float3 worldNormal = UnityObjectToWorldNormal(calcNormal(localFinalPos));
+            #endif  // defined(_CALCSPACE_WORLD)
+
+            #if defined(LIGHTMAP_ON)
+            #    ifdef DYNAMICLIGHTMAP_ON
+                const float4 lmap = fi.lmap;
+            #    else
+                const float4 lmap = float4(fi.lmap, 0.0, 0.0);
+            #    endif  // DYNAMICLIGHTMAP_ON
+            #elif defined(UNITY_SHOULD_SAMPLE_SH)
+                const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
+            #else
+                const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
+            #endif  // defined(LIGHTMAP_ON)
+
+                GBuffer gb;
+                UNITY_INITIALIZE_OUTPUT(GBuffer, gb);
+            #if defined(_DEBUGVIEW_STEP)
+                gb.diffuse = float4((ro.rayStep / _DebugStepDiv).xxx, 1.0);
+                gb.normal = half4(worldNormal * 0.5 + 0.5, 1.0);
+            #elif defined(_DEBUGVIEW_RAY_LENGTH)
+                UNITY_INITIALIZE_OUTPUT(GBuffer, gb);
+                gb.diffuse = float4((ro.rayLength / _DebugRayLengthDiv).xxx, 1.0);
+                gb.normal = half4(worldNormal * 0.5 + 0.5, 1.0);
+            #else
+                gb.emission = calcLightingDeferred(
+                    _Color,
+                    worldFinalPos,
+                    worldNormal,
+                    1.0,
+                    lmap,
+                    half3(0.0, 0.0, 0.0),
+                    /* out */ gb.diffuse,
+                    /* out */ gb.specular,
+                    /* out */ gb.normal);
+            #endif  // defined(_DEBUGVIEW_STEP)
+
+            #if !defined(_NODEPTH_ON)
+                const float4 clipPos = UnityWorldToClipPos(worldFinalPos);
+                gb.depth = getDepth(clipPos);
+            #endif  // !defined(_NODEPTH_ON)
+
+                return gb;
+            }
+
+            /*!
+             * Calculate lighting.
+             * @param [in] color  Base color.
+             * @param [in] worldPos  World coordinate.
+             * @param [in] worldNormal  Normal in world space.
+             * @param [in] atten  Light attenuation.
+             * @param [in] lmap  Light map parameters.
+             * @param [in] ambient  Ambient light.
+             * @param [out] diffuse  Diffuse and occulusion. (rgb: diffuse, a: occlusion)
+             * @param [out] specular  Specular and smoothness. (rgb: specular, a: smoothness)
+             * @param [out] normal  Encoded normal. (rgb: normal, a: unused)
+             * @return Emission color.
+             */
+            half4 calcLightingDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal)
+            {
+            #if defined(_LIGHTING_CUSTOM)
+                return calcLightingCustomDeferred(color, worldPos, worldNormal, atten, lmap, ambient, /* out */ diffuse, /* out */ specular, /* out */ normal);
+            #elif defined(_LIGHTING_UNITY_LAMBERT) \
+                || defined(_LIGHTING_UNITY_BLINN_PHONG) \
+                || defined(_LIGHTING_UNITY_STANDARD) \
+                || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+                return calcLightingUnityDeferred(color, worldPos, worldNormal, atten, lmap, ambient, /* out */ diffuse, /* out */ specular, /* out */ normal);
+            #else
+                // assume _LIGHTING_UNLIT
+                diffuse = half4(color.rgb, 1.0);
+                specular = half4(0.0, 0.0, 0.0, 0.0);
+                normal = half4(worldNormal * 0.5 + 0.5, 1.0);
+                return half4(0.0, 0.0, 0.0, 0.0);
+            #endif  // defined(_LIGHTING_CUSTOM)
+            }
+
+            /*!
+             * Calculate lighting with lighting method on Unity Surface Shaders.
+             * @param [in] color  Base color.
+             * @param [in] worldPos  World coordinate.
+             * @param [in] worldNormal  Normal in world space.
+             * @param [in] atten  Light attenuation.
+             * @param [in] lmap  Light map parameters.
+             * @param [in] ambient  Ambient light.
+             * @param [out] diffuse  Diffuse and occulusion. (rgb: diffuse, a: occlusion)
+             * @param [out] specular  Specular and smoothness. (rgb: specular, a: smoothness)
+             * @param [out] normal  Encoded normal. (rgb: normal, a: unused)
+             * @return Emission color.
+             */
+            half4 calcLightingUnityDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal)
+            {
+            #if defined(_LIGHTING_UNITY_STANDARD)
+            #    define LightingUnity_GI(so, giInput, gi) LightingStandard_GI(so, giInput, gi)
+            #    define LightingUnity_Deferred(so, worldViewDir, gi, diffuse, specular, normal) LightingStandard_Deferred(so, worldViewDir, gi, diffuse, specular, normal)
+                SurfaceOutputStandard so;
+                UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandard, so);
+                so.Albedo = color.rgb;
+                so.Normal = worldNormal;
+                so.Emission = half3(0.0, 0.0, 0.0);
+                so.Metallic = _Metallic;
+                so.Smoothness = _Glossiness;
+                so.Occlusion = 1.0;
+                so.Alpha = color.a;
+            #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            #    define LightingUnity_GI(so, giInput, gi) LightingStandardSpecular_GI(so, giInput, gi)
+            #    define LightingUnity_Deferred(so, worldViewDir, gi, diffuse, specular, normal) LightingStandardSpecular_Deferred(so, worldViewDir, gi, diffuse, specular, normal)
+                SurfaceOutputStandardSpecular so;
+                UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandardSpecular, so);
+                so.Albedo = color.rgb;
+                so.Specular = _SpecColor.rgb;
+                so.Normal = worldNormal;
+                so.Emission = half3(0.0, 0.0, 0.0);
+                so.Smoothness = _Glossiness;
+                so.Occlusion = 1.0;
+                so.Alpha = color.a;
+            #else
+                SurfaceOutput so;
+                UNITY_INITIALIZE_OUTPUT(SurfaceOutput, so);
+                so.Albedo = color.rgb;
+                so.Normal = worldNormal;
+                so.Emission = half3(0.0, 0.0, 0.0);
+            #    if defined(_LIGHTING_UNITY_BLINN_PHONG)
+            #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
+            #        define LightingUnity_Deferred(so, worldViewDir, gi, diffuse, specular, normal) LightingBlinnPhong_Deferred(so, worldViewDir, gi, diffuse, specular, normal)
+                so.Specular = _SpecPower / 128.0;
+                so.Gloss = _Glossiness;
+                // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
+            #    else
+            #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
+            #        define LightingUnity_Deferred(so, worldViewDir, gi, diffuse, specular, normal) LightingLambert_Deferred(so, gi, diffuse, specular, normal)
+            #    endif  // defined(_LIGHTING_UNITY_BLINN_PHONG)
+                so.Alpha = color.a;
+            #endif  // defined(_LIGHTING_UNITY_STANDARD)
+
+                UnityGI gi = getGI(worldPos, atten);
+
+                const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(worldPos));
+            #if !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
+                lmap = float4(0.0, 0.0, 0.0, 0.0);
+            #endif  // !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
+                UnityGIInput giInput = getGIInput(gi.light, worldPos, worldNormal, worldViewDir, atten, lmap, ambient);
+                LightingUnity_GI(so, giInput, gi);
+
+                half4 emission = LightingUnity_Deferred(so, worldViewDir, gi, /* out */ diffuse, /* out */ specular, /* out */ normal);
+            #if !defined(UNITY_HDR_ON)
+                emission.rgb = exp2(-emission.rgb);
+            #endif  // !defined(UNITY_HDR_ON)
+
+                return emission;
+
+            #undef LightingUnity_GI
+            #undef LightingUnity_Deferred
+            }
+
+            /*!
+             * Calculate lighting.
+             * @param [in] color  Base color.
+             * @param [in] worldPos  World coordinate.
+             * @param [in] worldNormal  Normal in world space.
+             * @param [in] atten  Light attenuation.
+             * @param [in] lmap  Light map parameters.
+             * @param [in] ambient  Ambient light.
+             * @param [out] diffuse  Diffuse and occulusion. (rgb: diffuse, a: occlusion)
+             * @param [out] specular  Specular and smoothness. (rgb: specular, a: smoothness)
+             * @param [out] normal  Encoded normal. (rgb: normal, a: unused)
+             * @return Emission color.
+             */
+            half4 calcLightingCustomDeferred(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient, out half4 diffuse, out half4 specular, out half4 normal)
+            {
+                const float3 worldViewDir = normalize(_WorldSpaceCameraPos - worldPos);
+            #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+                const float3 worldLightDir = UnityWorldSpaceLightDir(worldPos);
+            #else
+                const float3 worldLightDir = normalize(UnityWorldSpaceLightDir(worldPos));
+            #endif  // defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+                const fixed3 lightCol = _LightColor0.rgb * atten;
+
+                // Lambertian reflectance.
+                const float nDotL = dot(worldNormal, worldLightDir);
+                const half3 diffuseColor = lightCol * pow(nDotL * 0.5 + 0.5, 2.0);  // will be mul instruction.
+
+                // Specular reflection.
+                // const half3 specularColor = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), _SpecPower) * _SpecColor.rgb * lightCol;
+                const half3 specularColor = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), _SpecPower) * _SpecColor.rgb * lightCol;
+
+                // Ambient color.
+            #if UNITY_SHOULD_SAMPLE_SH
+                ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
+            #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
+
+                diffuse = half4((diffuseColor + ambient) * color.rgb, 1.0);
+                specular = half4(specularColor, _Glossiness);
+                normal = half4(worldNormal * 0.5 + 0.5, 1.0);
+                return half4(0.0, 0.0, 0.0, 0.0);
+            }
             ENDCG
         }
 
