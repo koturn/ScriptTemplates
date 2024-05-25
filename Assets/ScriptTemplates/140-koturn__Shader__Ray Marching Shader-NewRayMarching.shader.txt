@@ -218,7 +218,7 @@ Shader "Custom/#SCRIPTNAME#"
         #include "UnityCG.cginc"
         #include "UnityStandardUtils.cginc"
 
-        #ifdef OPTIMIZE_BOX_PROJECTION
+        #if defined(OPTIMIZE_BOX_PROJECTION)
         float3 boxProj(float3 worldRefDir, float3 worldPos, float4 probePos, float4 boxMin, float4 boxMax);
         #    define BoxProjectedCubemapDirection boxProj
         #endif  // defined(OPTIMIZE_BOX_PROJECTION)
@@ -257,7 +257,7 @@ Shader "Custom/#SCRIPTNAME#"
 
         //! Color of the objects.
         uniform float4 _Color;
-        // #ifdef _ALPHATEST_ON
+        // #if defined(_ALPHATEST_ON)
         // //! Alpha Cutoff.
         // uniform float _Cutoff;
         // #endif  // defined(_ALPHATEST_ON)
@@ -267,10 +267,10 @@ Shader "Custom/#SCRIPTNAME#"
         //! Value of Metallic.
         uniform half _Metallic;
 
-        #ifndef UNITY_LIGHTING_COMMON_INCLUDED
+        #if !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         //! Color of light.
         uniform fixed4 _LightColor0;
-        #endif  // defined(UNITY_LIGHTING_COMMON_INCLUDED)
+        #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
         //! Specular color.
         uniform half4 _SpecColor;
@@ -293,11 +293,11 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Object space position of the vertex.
             float4 vertex : POSITION;
-        #ifdef LIGHTMAP_ON
+        #if defined(LIGHTMAP_ON)
             //! Lightmap coordinate.
             float4 texcoord1 : TEXCOORD1;
         #endif  // defined(LIGHTMAP_ON)
-        #ifdef DYNAMICLIGHTMAP_ON
+        #if defined(DYNAMICLIGHTMAP_ON)
             //! Dynamic Lightmap coordinate.
             float4 texcoord2 : TEXCOORD2;
         #endif  // defined(DYNAMICLIGHTMAP_ON)
@@ -321,11 +321,11 @@ Shader "Custom/#SCRIPTNAME#"
             //! Unnormalized ray direction in object space.
             float3 rayDirVec : TEXCOORD0;
         #endif  // defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
-        #ifndef _CALCSPACE_WORLD
+        #if !defined(_CALCSPACE_WORLD)
             //! Camera position in object space. (for pre-calulation on vertex shader)
             nointerpolation float3 cameraPos : TEXCOORD1;
         #endif  // !defined(_CALCSPACE_WORLD)
-        #ifdef _CLIPLENGTHMODE_DEPTH_TEXTURE
+        #if defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
             float4 screenPos : TEXCOORD2;
         #endif  // defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
             //! Members abourt lighting coordinates, _LightCoord and _ShadowCoord.
@@ -425,7 +425,7 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_TRANSFER_INSTANCE_ID(v, o);
             UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
-        #ifdef _CALCSPACE_WORLD
+        #if defined(_CALCSPACE_WORLD)
             o.fragPos = mul(unity_ObjectToWorld, v.vertex).xyz;
         #else
             const float3 vertPos = v.vertex.xyz;
@@ -437,17 +437,17 @@ Shader "Custom/#SCRIPTNAME#"
         #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
         #endif  // defined(_CALCSPACE_WORLD)
 
-        #ifdef LIGHTMAP_ON
+        #if defined(LIGHTMAP_ON)
             o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
         #endif  // defined(LIGHTMAP_ON)
-        #ifdef DYNAMICLIGHTMAP_ON
+        #if defined(DYNAMICLIGHTMAP_ON)
             o.lmap.zw = v.texcoord2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
         #endif  // defined(DYNAMICLIGHTMAP_ON)
 
             UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
 
             o.pos = UnityObjectToClipPos(v.vertex);
-        #ifdef _CLIPLENGTHMODE_DEPTH_TEXTURE
+        #if defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
             o.screenPos = ComputeNonStereoScreenPos(o.pos);
             COMPUTE_EYEDEPTH(o.screenPos.z);
         #endif  // defined(_CLIPLENGTHMODE_DEPTH_TEXTURE)
@@ -493,7 +493,7 @@ Shader "Custom/#SCRIPTNAME#"
             }
         #endif  // !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
 
-        #ifdef _CALCSPACE_WORLD
+        #if defined(_CALCSPACE_WORLD)
             const float3 worldFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
             const float3 worldNormal = calcNormal(worldFinalPos);
         #else
@@ -503,11 +503,11 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_CALCSPACE_WORLD)
 
         #if defined(LIGHTMAP_ON)
-        #    ifdef DYNAMICLIGHTMAP_ON
+        #    if defined(DYNAMICLIGHTMAP_ON)
             const float4 lmap = fi.lmap;
         #    else
             const float4 lmap = float4(fi.lmap, 0.0, 0.0);
-        #    endif  // DYNAMICLIGHTMAP_ON
+        #    endif  // defined(DYNAMICLIGHTMAP_ON)
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
         #else
@@ -536,7 +536,7 @@ Shader "Custom/#SCRIPTNAME#"
         #else
             fo.color = color;
         #endif  // defined(_DEBUGVIEW_STEP)
-        #ifndef _NODEPTH_ON
+        #if !defined(_NODEPTH_ON)
             fo.depth = getDepth(clipPos);
         #endif  // !defined(_NODEPTH_ON)
 
@@ -555,7 +555,7 @@ Shader "Custom/#SCRIPTNAME#"
         {
             rayparam rp;
 
-        #ifdef _CALCSPACE_WORLD
+        #if defined(_CALCSPACE_WORLD)
             rp.rayOrigin = _WorldSpaceCameraPos;
             const float3 rayDirVec = fi.fragPos - _WorldSpaceCameraPos;
         #else
@@ -573,12 +573,12 @@ Shader "Custom/#SCRIPTNAME#"
         #else
             // `rdv` is cos(x) * y, where x is angle between camera forward direction and ray direction
             // and y is local scale factor.
-        #    ifdef _CALCSPACE_WORLD
+        #    if defined(_CALCSPACE_WORLD)
             const float rdv = dot(rp.rayDir, -UNITY_MATRIX_V[2].xyz);
         #    else
             const float rdv = dot(mul((float3x3)unity_ObjectToWorld, rp.rayDir), -UNITY_MATRIX_V[2].xyz);
         #    endif  // defined(_CALCSPACE_WORLD)
-        #    ifdef _CLIPLENGTHMODE_CAMERA_CLIP
+        #    if defined(_CLIPLENGTHMODE_CAMERA_CLIP)
             const float2 linearDepths = _ProjectionParams.yz;
         #    else
             const float2 linearDepths = float2(_ProjectionParams.y, LinearEyeDepth(SAMPLE_DEPTH_TEXTURE_PROJ(_CameraDepthTexture, fi.screenPos)));
@@ -594,7 +594,7 @@ Shader "Custom/#SCRIPTNAME#"
             // -------|--------------------------------------------------|-----------------------------------------------------------
             // Front  | Surface of the frontface mesh                    | Distance from camera to backface mesh + `_MaxInsideLength`
             // Back   | Between Camera and surface of the frontface mesh | Distance from camera to backface mesh
-        #    ifdef _CALCSPACE_WORLD
+        #    if defined(_CALCSPACE_WORLD)
             maxInsideLength = maxInsideLength / length(mul((float3x3)unity_WorldToObject, rp.rayDir));
         #    endif  // defined(_CALCSPACE_WORLD)
             const float rayDirVecLength = length(rayDirVec);
@@ -845,7 +845,7 @@ Shader "Custom/#SCRIPTNAME#"
             so.Albedo = color.rgb;
             so.Normal = worldNormal;
             so.Emission = half3(0.0, 0.0, 0.0);
-        #    ifdef _LIGHTING_UNITY_BLINN_PHONG
+        #    if defined(_LIGHTING_UNITY_BLINN_PHONG)
         #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
         #        define LightingUnity(so, worldViewDir, gi) LightingBlinnPhong(so, worldViewDir, gi)
             so.Specular = _SpecPower / 128.0;
@@ -861,7 +861,7 @@ Shader "Custom/#SCRIPTNAME#"
             UnityGI gi = getGI(worldPos, atten);
 
             const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(worldPos));
-        #ifdef UNITY_PASS_FORWARDBASE
+        #if defined(UNITY_PASS_FORWARDBASE)
         #    if !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
             lmap = float4(0.0, 0.0, 0.0, 0.0);
         #    endif  // !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
@@ -985,13 +985,13 @@ Shader "Custom/#SCRIPTNAME#"
         #    if defined(UNITY_SPECCUBE_BLENDING) || defined(UNITY_SPECCUBE_BOX_PROJECTION)
             giInput.boxMin[0] = unity_SpecCube0_BoxMin;
         #    endif  // defined(UNITY_SPECCUBE_BLENDING) || defined(UNITY_SPECCUBE_BOX_PROJECTION)
-        #    ifdef UNITY_SPECCUBE_BOX_PROJECTION
+        #    if defined(UNITY_SPECCUBE_BOX_PROJECTION)
             giInput.boxMax[0] = unity_SpecCube0_BoxMax;
             giInput.probePosition[0] = unity_SpecCube0_ProbePosition;
             giInput.boxMax[1] = unity_SpecCube1_BoxMax;
             giInput.boxMin[1] = unity_SpecCube1_BoxMin;
             giInput.probePosition[1] = unity_SpecCube1_ProbePosition;
-        #    endif  // UNITY_SPECCUBE_BOX_PROJECTION
+        #    endif  // defined(UNITY_SPECCUBE_BOX_PROJECTION)
         #endif  // !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
 
             return giInput;
@@ -1013,7 +1013,7 @@ Shader "Custom/#SCRIPTNAME#"
         {
             // UNITY_SPECCUBE_BOX_PROJECTION is defined if
             // "Reflection Probes Box Projection" of GraphicsSettings is enabled.
-        #ifdef UNITY_SPECCUBE_BOX_PROJECTION
+        #if defined(UNITY_SPECCUBE_BOX_PROJECTION)
             // probePos.w == 1.0 if Box Projection is enabled.
             if (probePos.w > 0.0) {
                 const float3 magnitudes = ((worldRefDir > 0.0 ? boxMax.xyz : boxMin.xyz) - worldPos) / worldRefDir;
@@ -1234,7 +1234,7 @@ Shader "Custom/#SCRIPTNAME#"
                 }
             #endif  // !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
 
-            #ifdef _CALCSPACE_WORLD
+            #if defined(_CALCSPACE_WORLD)
                 const float3 worldFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
                 const float3 worldNormal = calcNormal(worldFinalPos);
             #else
@@ -1244,11 +1244,11 @@ Shader "Custom/#SCRIPTNAME#"
             #endif  // defined(_CALCSPACE_WORLD)
 
             #if defined(LIGHTMAP_ON)
-            #    ifdef DYNAMICLIGHTMAP_ON
+            #    if defined(DYNAMICLIGHTMAP_ON)
                 const float4 lmap = fi.lmap;
             #    else
                 const float4 lmap = float4(fi.lmap, 0.0, 0.0);
-            #    endif  // DYNAMICLIGHTMAP_ON
+            #    endif  // defined(DYNAMICLIGHTMAP_ON)
             #elif defined(UNITY_SHOULD_SAMPLE_SH)
                 const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
             #else
@@ -1523,7 +1523,7 @@ Shader "Custom/#SCRIPTNAME#"
                 float4 screenPos = ComputeNonStereoScreenPos(o.pos);
                 COMPUTE_EYEDEPTH(screenPos.z);
 
-            #ifdef _CALCSPACE_WORLD
+            #if defined(_CALCSPACE_WORLD)
                 o.rayOrigin = mul(unity_ObjectToWorld, v.vertex).xyz;
             #    if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
                 o.rayDirVec = getCameraDirVec(screenPos);
@@ -1598,7 +1598,7 @@ Shader "Custom/#SCRIPTNAME#"
                     discard;
                 }
 
-            #ifdef _CALCSPACE_WORLD
+            #if defined(_CALCSPACE_WORLD)
                 const float3 worldFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
             #else
                 const float3 localFinalPos = rp.rayOrigin + rp.rayDir * ro.rayLength;
@@ -1628,7 +1628,7 @@ Shader "Custom/#SCRIPTNAME#"
             #    else
                     const float3 worldLightDir = normalize(UnityWorldSpaceLightDir(worldPos));
             #    endif  // defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
-            #    ifdef _CALCSPACE_WORLD
+            #    if defined(_CALCSPACE_WORLD)
                     const float3 worldNormal = calcNormal(worldFinalPos);
             #    else
                     const float3 worldNormal = UnityObjectToWorldNormal(calcNormal(localFinalPos));
@@ -1645,7 +1645,7 @@ Shader "Custom/#SCRIPTNAME#"
                 //
                 fout fo;
                 fo.color = float4(0.0, 0.0, 0.0, 0.0);
-            #    ifndef _NODEPTH_ON
+            #    if !defined(_NODEPTH_ON)
                 fo.depth = getDepth(clipPos);
             #    endif  // !defined(_NODEPTH_ON)
                 return fo;
