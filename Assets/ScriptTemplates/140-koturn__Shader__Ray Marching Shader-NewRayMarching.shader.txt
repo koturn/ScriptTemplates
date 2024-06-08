@@ -1266,12 +1266,10 @@ Shader "Custom/#SCRIPTNAME#"
                 GBuffer gb;
                 UNITY_INITIALIZE_OUTPUT(GBuffer, gb);
             #if defined(_DEBUGVIEW_STEP)
-                gb.diffuse = float4((ro.rayStep / _DebugStepDiv).xxx, 1.0);
-                gb.normal = half4(worldNormal * 0.5 + 0.5, 1.0);
+                gb.emission = float4((ro.rayStep / _DebugStepDiv).xxx, 1.0);
             #elif defined(_DEBUGVIEW_RAY_LENGTH)
                 UNITY_INITIALIZE_OUTPUT(GBuffer, gb);
-                gb.diffuse = float4((ro.rayLength / _DebugRayLengthDiv).xxx, 1.0);
-                gb.normal = half4(worldNormal * 0.5 + 0.5, 1.0);
+                gb.emission = float4((ro.rayLength / _DebugRayLengthDiv).xxx, 1.0);
             #else
                 gb.emission = calcLightingDeferred(
                     _Color,
@@ -1317,10 +1315,13 @@ Shader "Custom/#SCRIPTNAME#"
                 return calcLightingUnityDeferred(color, worldPos, worldNormal, atten, lmap, ambient, /* out */ diffuse, /* out */ specular, /* out */ normal);
             #else
                 // assume _LIGHTING_UNLIT
-                diffuse = half4(color.rgb, 1.0);
+                // diffuse = half4(color.rgb, 1.0);
+                diffuse = half4(0.0, 0.0, 0.0, 1.0);
                 specular = half4(0.0, 0.0, 0.0, 0.0);
                 normal = half4(worldNormal * 0.5 + 0.5, 1.0);
-                return half4(0.0, 0.0, 0.0, 0.0);
+                // normal = half4(0.0, 0.0, 0.0, 1.0);
+                // return half4(0.0, 0.0, 0.0, 0.0);
+                return half4(color.rgb, 0.0);
             #endif  // defined(_LIGHTING_CUSTOM)
             }
 
