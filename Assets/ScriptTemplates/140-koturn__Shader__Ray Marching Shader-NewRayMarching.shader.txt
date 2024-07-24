@@ -666,7 +666,7 @@ Shader "Custom/#SCRIPTNAME#"
             float r = map(rayOrigin + rayDirVec * ro.rayLength);
             float d = r;
 
-            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r * marchingFactor) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -687,7 +687,7 @@ Shader "Custom/#SCRIPTNAME#"
             float d = r;
             float m = -1.0;
 
-            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r * marchingFactor) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
