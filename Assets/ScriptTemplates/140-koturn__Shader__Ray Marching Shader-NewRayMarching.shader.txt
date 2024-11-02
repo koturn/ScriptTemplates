@@ -47,6 +47,14 @@ Shader "Custom/#SCRIPTNAME#"
 
         _AutoRelaxFactor ("Coeeficient of Auto Step Size Relaxation", Range(0.0, 1.0)) = 0.8
 
+        [KeywordEnum(Discard, Fixed Color)]
+        _BackgroundMode ("Background mode", Int) = 0
+
+        _BackgroundColor ("Background Color", Color) = (0.0, 0.0, 0.0, 1.0)
+
+        [KeywordEnum(Far Clip, Mesh)]
+        _BackgroundDepth ("Background depth", Int) = 0
+
         [KeywordEnum(None, Step, Ray Length)]
         _DebugView ("Debug view mode", Int) = 0
 
@@ -226,6 +234,18 @@ Shader "Custom/#SCRIPTNAME#"
         #include "UnityPBSLighting.cginc"
 
 
+        #if defined(SHADER_API_GLCORE) \
+            || defined(SHADER_API_OPENGL) \
+            || defined(SHADER_API_GLES) \
+            || defined(SHADER_API_GLES3)
+        //! Depth of far clip plane.
+        static const float kFarClipPlaneDepth = 1.0;
+        #else
+        //! Depth of far clip plane.
+        static const float kFarClipPlaneDepth = 0.0;
+        #endif
+
+
         //! Maximum loop count for ForwardBase.
         uniform int _MaxLoop;
         //! Maximum loop count for ForwardAdd.
@@ -248,6 +268,8 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float _AccelarationFactor;
         //! Coeeficient of Auto Step Size Relaxation.
         uniform float _AutoRelaxFactor;
+        //! Background color.
+        uniform half4 _BackgroundColor;
         //! Divisor of number of ray steps for debug view.
         uniform float _DebugStepDiv;
         //! Divisor of number of ray length for debug view.
@@ -312,13 +334,13 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Clip space position of the vertex.
             float4 pos : SV_POSITION;
-        #if defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #if defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH) || defined(_BACKGROUNDMODE_FIXED_COLOR)
             //! Object/World space position of the fragment.
             float3 fragPos : TEXCOORD0;
         #else
             //! Unnormalized ray direction in object space.
             float3 rayDirVec : TEXCOORD0;
-        #endif  // defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #endif  // defined(_CALCSPACE_WORLD) || defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH) || defined(_BACKGROUNDMODE_FIXED_COLOR)
         #if !defined(_CALCSPACE_WORLD)
             //! Camera position in object space. (for pre-calulation on vertex shader)
             nointerpolation float3 cameraPos : TEXCOORD1;
@@ -428,11 +450,11 @@ Shader "Custom/#SCRIPTNAME#"
         #else
             const float3 vertPos = v.vertex.xyz;
             o.cameraPos = mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
-        #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH) || defined(_BACKGROUNDMODE_FIXED_COLOR)
             o.fragPos = vertPos;
         #    else
             o.rayDirVec = vertPos - o.cameraPos;
-        #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH) || defined(_BACKGROUNDMODE_FIXED_COLOR)
         #endif  // defined(_CALCSPACE_WORLD)
 
         #if defined(LIGHTMAP_ON)
@@ -487,7 +509,26 @@ Shader "Custom/#SCRIPTNAME#"
             const rmout ro = rayMarch(rp);
         #if !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
             if (!ro.isHit) {
+        #    if defined(_BACKGROUNDMODE_FIXED_COLOR)
+                fout fo;
+        #        if defined(_CALCSPACE_WORLD)
+                const float4 clipPos = UnityWorldToClipPos(fi.fragPos);
+        #        else
+                const float4 clipPos = UnityObjectToClipPos(fi.fragPos);
+        #        endif  // defined(_CALCSPACE_WORLD)
+                fo.color = _BackgroundColor;
+                UNITY_APPLY_FOG(clipPos.z, color);
+        #        if !defined(_SVDEPTH_OFF)
+        #            if defined(_BACKGROUNDDEPTH_MESH)
+                fo.depth = getDepth(clipPos);
+        #            else
+                fo.depth = kFarClipPlaneDepth;
+        #            endif  // defined(_BACKGROUNDDEPTH_MESH)
+        #        endif  // !defined(_SVDEPTH_OFF)
+                return fo;
+        #    else
                 discard;
+        #    endif  // defined(_BACKGROUNDMODE_FIXED_COLOR)
             }
         #endif  // !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
 
@@ -558,11 +599,11 @@ Shader "Custom/#SCRIPTNAME#"
             const float3 rayDirVec = fi.fragPos - _WorldSpaceCameraPos;
         #else
             rp.rayOrigin = fi.cameraPos;
-        #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #    if defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH) || defined(_BACKGROUNDMODE_FIXED_COLOR)
             const float3 rayDirVec = fi.fragPos - fi.cameraPos;
         #    else
             const float3 rayDirVec = fi.rayDirVec;
-        #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH)
+        #    endif  // defined(_ASSUMEINSIDE_SIMPLE) || defined(_ASSUMEINSIDE_MAX_LENGTH) || defined(_BACKGROUNDMODE_FIXED_COLOR)
         #endif  // defined(_CALCSPACE_WORLD)
             rp.rayDir = normalize(rayDirVec);
 
@@ -769,8 +810,14 @@ Shader "Custom/#SCRIPTNAME#"
             || defined(SHADER_API_OPENGL) \
             || defined(SHADER_API_GLES) \
             || defined(SHADER_API_GLES3)
+            // [-1.0, 1.0] -> [0.0, 1.0]
+            // Near: -1.0
+            // Far: -1.0
             return depth * 0.5 + 0.5;
         #else
+            // [0.0, 1.0] -> [0.0, 1.0] (No conversion)
+            // Near: 1.0
+            // Far: 0.0
             return depth;
         #endif
         }
@@ -1062,6 +1109,8 @@ Shader "Custom/#SCRIPTNAME#"
             CGPROGRAM
             #pragma multi_compile_fwdbase
             #pragma multi_compile_fog
+            #pragma shader_feature_local _ _BACKGROUNDMODE_FIXED_COLOR
+            #pragma shader_feature_local _ _BACKGROUNDDEPTH_MESH
             #pragma shader_feature_local_fragment _DEBUGVIEW_NONE _DEBUGVIEW_STEP _DEBUGVIEW_RAY_LENGTH
             #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
@@ -1086,6 +1135,8 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma multi_compile_fwdadd_fullshadow
             #pragma multi_compile_fog
             #pragma shader_feature_local _ _FORWARDADD_OFF
+            #pragma shader_feature_local _ _BACKGROUNDMODE_FIXED_COLOR
+            #pragma shader_feature_local _ _BACKGROUNDDEPTH_MESH
             #pragma shader_feature_local_fragment _DEBUGVIEW_NONE _DEBUGVIEW_STEP _DEBUGVIEW_RAY_LENGTH
             #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
@@ -1170,6 +1221,8 @@ Shader "Custom/#SCRIPTNAME#"
             CGPROGRAM
             #pragma exclude_renderers nomrt
             #pragma multi_compile_prepassfinal
+            #pragma shader_feature_local _ _BACKGROUNDMODE_FIXED_COLOR
+            #pragma shader_feature_local _ _BACKGROUNDDEPTH_MESH
             #pragma shader_feature_local_fragment _DEBUGVIEW_NONE _DEBUGVIEW_STEP _DEBUGVIEW_RAY_LENGTH
             #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
@@ -1236,7 +1289,28 @@ Shader "Custom/#SCRIPTNAME#"
                 const rmout ro = rayMarch(rp);
             #if !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
                 if (!ro.isHit) {
+            #    if defined(_BACKGROUNDMODE_FIXED_COLOR)
+                    GBuffer gb;
+                    UNITY_INITIALIZE_OUTPUT(GBuffer, gb);
+            #        if defined(_CALCSPACE_WORLD)
+                    const float4 clipPos = UnityWorldToClipPos(fi.fragPos);
+            #        else
+                    const float4 clipPos = UnityObjectToClipPos(fi.fragPos);
+            #        endif  // defined(_CALCSPACE_WORLD)
+                    gb.emission.rgb = _BackgroundColor.rgb;
+                    gb.diffuse.a = 1.0;
+                    // gb.normal.rgb = (0.0).xxx;
+            #        if !defined(_SVDEPTH_OFF)
+            #            if defined(_BACKGROUNDDEPTH_MESH)
+                    gb.depth = getDepth(clipPos);
+            #            else
+                    gb.depth = kFarClipPlaneDepth;
+            #            endif  // defined(_BACKGROUNDDEPTH_MESH)
+            #        endif  // !defined(_SVDEPTH_OFF)
+                    return gb;
+            #    else
                     discard;
+            #    endif  // defined(_BACKGROUNDMODE_FIXED_COLOR)
                 }
             #endif  // !defined(_DEBUGVIEW_STEP) && !defined(_DEBUGVIEW_RAY_LENGTH)
 
