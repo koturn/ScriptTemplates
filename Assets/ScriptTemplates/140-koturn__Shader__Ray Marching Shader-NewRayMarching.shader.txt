@@ -682,7 +682,7 @@ Shader "Custom/#SCRIPTNAME#"
             const float3 rayOrigin = rp.rayOrigin * rcpScales;
 
         #if defined(_STEPMETHOD_OVER_RELAX)
-            // https://www.researchgate.net/publication/370902411_Automatic_Step_Size_Relaxation_in_Sphere_Tracing
+            // https://diglib.eg.org/items/8ea5fa60-fe2f-4fef-8fd0-3783cb3200f0
             const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
             float r = asfloat(0x7f800000);  // +inf
             float d = 0.0;
