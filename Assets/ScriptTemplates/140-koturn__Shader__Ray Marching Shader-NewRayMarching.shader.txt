@@ -209,7 +209,7 @@ Shader "Custom/#SCRIPTNAME#"
         }
 
         CGINCLUDE
-        #pragma target 3.0
+        #pragma target 5.0
 
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
@@ -372,8 +372,13 @@ Shader "Custom/#SCRIPTNAME#"
             //! Output color of the pixel.
             half4 color : SV_Target;
         #if (!defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)) && !defined(_SVDEPTH_OFF)
+        #    if SHADER_TARGET >= 45
+            //! Depth of the pixel.
+            float depth : SV_DepthLessEqual;
+        #    else
             //! Depth of the pixel.
             float depth : SV_Depth;
+        #    endif  // SHADER_TARGET >= 45
         #endif  // (!defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)) && !defined(_SVDEPTH_OFF)
         };
 
