@@ -550,7 +550,7 @@ Shader "Custom/#SCRIPTNAME#"
         #    if defined(DYNAMICLIGHTMAP_ON)
             const float4 lmap = fi.lmap;
         #    else
-            const float4 lmap = float4(fi.lmap, 0.0, 0.0);
+            const float4 lmap = float4(fi.lmap.xy, 0.0, 0.0);
         #    endif  // defined(DYNAMICLIGHTMAP_ON)
         #elif defined(UNITY_SHOULD_SAMPLE_SH)
             const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
@@ -1332,7 +1332,7 @@ Shader "Custom/#SCRIPTNAME#"
             #    if defined(DYNAMICLIGHTMAP_ON)
                 const float4 lmap = fi.lmap;
             #    else
-                const float4 lmap = float4(fi.lmap, 0.0, 0.0);
+                const float4 lmap = float4(fi.lmap.xy, 0.0, 0.0);
             #    endif  // defined(DYNAMICLIGHTMAP_ON)
             #elif defined(UNITY_SHOULD_SAMPLE_SH)
                 const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
