@@ -215,7 +215,7 @@ Shader "Custom/#SCRIPTNAME#"
         }
 
         CGINCLUDE
-        #pragma target 5.0
+        #pragma target 3.0
 
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
