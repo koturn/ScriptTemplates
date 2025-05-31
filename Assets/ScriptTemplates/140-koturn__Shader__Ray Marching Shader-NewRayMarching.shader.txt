@@ -90,6 +90,9 @@ Shader "Custom/#SCRIPTNAME#"
         [KeywordEnum(Off, On, Dominant Dir)]
         _VRCLightVolumesSpecular ("VRC Light Volumes Specular", Int) = 0
 
+        [Toggle(_LTCGI_ON)]
+        _LTCGI ("LTCGI", Int) = 0
+
 
         // ------------------------------------------------------------
         [Header(Rendering Parameters)]
@@ -193,6 +196,7 @@ Shader "Custom/#SCRIPTNAME#"
             "DisableBatching" = "True"
             "IgnoreProjector" = "True"
             "VRCFallback" = "Hidden"
+            "LTCGI" = "_LTCGI"
         }
 
         Cull [_Cull]
@@ -255,6 +259,13 @@ Shader "Custom/#SCRIPTNAME#"
         #include "AutoLight.cginc"
         #include "Lighting.cginc"
         #include "UnityPBSLighting.cginc"
+        #if defined(_LTCGI_ON)
+        #    define LTCGI_AVATAR_MODE
+        #    if defined(_LIGHTING_UNITY_LAMBERT)
+        #        define LTCGI_SPECULAR_OFF
+        #    endif  // defined(_LIGHTING_UNITY_LAMBERT)
+        #    include "/Packages/at.pimaker.ltcgi/Shaders/LTCGI.cginc"
+        #endif  // defined(_LTCGI_ON)
 
 
         #if defined(SHADER_API_GLCORE) \
@@ -949,20 +960,36 @@ Shader "Custom/#SCRIPTNAME#"
             LightingUnity_GI(so, giInput, gi);
         #endif  // defined(UNITY_PASS_FORWARDBASE)
 
-        #if (defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON)
-            half3 emission;
+        #if UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON)
+        #    if defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
             if (_UdonLightVolumeEnabled && _UdonLightVolumeCount != 0) {
                 gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
-                emission = calcLightVolumeEmission(color.rgb, worldPos, worldNormal, worldViewDir);
-            } else {
-                emission = half3(0.0, 0.0, 0.0);
+                so.Emission += calcLightVolumeEmission(color.rgb, worldPos, worldNormal, worldViewDir);
             }
-        #else
-            const half3 emission = half3(0.0, 0.0, 0.0);
-        #endif  // (defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON)
+        #    endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #    if defined(_LTCGI_ON)
+            float3 ltcgiSpecular = float3(0.0, 0.0, 0.0);
+            float3 ltcgiDiffuse = float3(0.0, 0.0, 0.0);;
+            LTCGI_Contribution(
+               worldPos,
+               worldNormal,
+               worldViewDir,
+               1.0 - _Glossiness,
+               float2(0.0, 0.0),
+               /* inout */ ltcgiDiffuse,
+               /* inout */ ltcgiSpecular);
+        #        if defined(LTCGI_SPECULAR_OFF)
+            so.Emission += color.rgb * ltcgiDiffuse;
+        #        else
+            so.Emission += color.rgb * ltcgiDiffuse + ltcgiSpecular;
+        #        endif  // defined(LTCGI_SPECULAR_OFF)
+        #    endif  // defined(_LTCGI_ON)
+        #endif  // UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON)
 
             half4 col = LightingUnity(so, worldViewDir, gi);
-            col.rgb += so.Emission + emission;
+        #if defined(UNITY_PASS_FORWARDBASE)
+            col.rgb += so.Emission;
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
 
             return col;
 
@@ -1689,6 +1716,7 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
             #pragma shader_feature_local_fragment _VRCLIGHTVOLUMES_OFF _VRCLIGHTVOLUMES_ON _VRCLIGHTVOLUMES_ADDITIVE_ONLY
             #pragma shader_feature_local_fragment _VRCLIGHTVOLUMESSPECULAR_OFF _VRCLIGHTVOLUMESSPECULAR_ON _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
+            #pragma shader_feature_local_fragment _ _LTCGI_ON
 
             #pragma vertex vert
             #pragma fragment frag
