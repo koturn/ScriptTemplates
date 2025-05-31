@@ -217,6 +217,7 @@ Shader "Custom/#SCRIPTNAME#"
         CGINCLUDE
         #pragma target 3.0
 
+        #pragma multi_compile_instancing
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
         #pragma shader_feature_local _CLIPLENGTHMODE_USE_PROPERTY_VALUE _CLIPLENGTHMODE_CAMERA_CLIP _CLIPLENGTHMODE_DEPTH_TEXTURE
@@ -262,8 +263,6 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float _MinRayLength;
         //! Maximum length of the ray.
         uniform float _MaxRayLength;
-        //! Scale vector.
-        uniform float3 _Scales;
         //! Maximum length inside the object.
         uniform float _MaxInsideLength;
         //! Marching Factor.
@@ -281,17 +280,10 @@ Shader "Custom/#SCRIPTNAME#"
         //! Divisor of number of ray length for debug view.
         uniform float _DebugRayLengthDiv;
 
-        //! Color of the objects.
-        uniform float4 _Color;
         // #if defined(_ALPHATEST_ON)
         // //! Alpha Cutoff.
         // uniform float _Cutoff;
         // #endif  // defined(_ALPHATEST_ON)
-
-        //! Value of smoothness.
-        uniform half _Glossiness;
-        //! Value of Metallic.
-        uniform half _Metallic;
 
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         //! Color of light.
@@ -301,8 +293,6 @@ Shader "Custom/#SCRIPTNAME#"
         //! Specular color.
         uniform half4 _SpecColor;
         #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
-        //! Specular power.
-        uniform float _SpecPower;
 
         UNITY_DECLARE_DEPTH_TEXTURE(_CameraDepthTexture);
 
@@ -313,9 +303,20 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float _UdonLightVolumeCount;
         #endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
 
-        // UNITY_INSTANCING_BUFFER_START(Props)
-        //     UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
-        // UNITY_INSTANCING_BUFFER_END(Props)
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+        //! Scale vector.
+        UNITY_DEFINE_INSTANCED_PROP(float3, _Scales)
+        //! Specular power.
+        UNITY_DEFINE_INSTANCED_PROP(float, _SpecPower)
+        //! Value of smoothness.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Glossiness)
+        //! Value of Metallic.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Metallic)
+        //! Color of the objects.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _Color)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
 
         /*!
          * @brief Input data type for vertex shader function, vert().
@@ -574,7 +575,7 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_LIGHT_ATTENUATION(atten, fi, worldFinalPos);
 
             half4 color = calcLighting(
-                _Color,
+                UNITY_ACCESS_INSTANCED_PROP(Props, _Color),
                 worldFinalPos,
                 worldNormal,
                 atten,
@@ -690,7 +691,7 @@ Shader "Custom/#SCRIPTNAME#"
         #elif defined(UNITY_PASS_SHADOWCASTER)
             const int maxLoop = _MaxLoopShadowCaster;
         #endif  // defined(UNITY_PASS_FORWARDBASE)
-            const float3 rcpScales = rcp(_Scales);
+            const float3 rcpScales = rcp(UNITY_ACCESS_INSTANCED_PROP(Props, _Scales));
             const float3 rayDirVec = rp.rayDir * rcpScales;
 
             rmout ro;
@@ -806,7 +807,7 @@ Shader "Custom/#SCRIPTNAME#"
             static const float3 ks[] = {k.xyy, k.yxy, k.yyx, k.xxx};
             static const float h = 0.0001;
 
-            const float3 rcpScales = rcp(_Scales);
+            const float3 rcpScales = rcp(UNITY_ACCESS_INSTANCED_PROP(Props, _Scales));
             float3 normal = float3(0.0, 0.0, 0.0);
 
             for (int i = 0; i < 4; i++) {
@@ -895,8 +896,8 @@ Shader "Custom/#SCRIPTNAME#"
             so.Albedo = color.rgb;
             so.Normal = worldNormal;
             so.Emission = half3(0.0, 0.0, 0.0);
-            so.Metallic = _Metallic;
-            so.Smoothness = _Glossiness;
+            so.Metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+            so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
             so.Occlusion = 1.0;
             so.Alpha = color.a;
         #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
@@ -908,7 +909,7 @@ Shader "Custom/#SCRIPTNAME#"
             so.Specular = _SpecColor.rgb;
             so.Normal = worldNormal;
             so.Emission = half3(0.0, 0.0, 0.0);
-            so.Smoothness = _Glossiness;
+            so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
             so.Occlusion = 1.0;
             so.Alpha = color.a;
         #else
@@ -920,8 +921,8 @@ Shader "Custom/#SCRIPTNAME#"
         #    if defined(_LIGHTING_UNITY_BLINN_PHONG)
         #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
         #        define LightingUnity(so, worldViewDir, gi) LightingBlinnPhong(so, worldViewDir, gi)
-            so.Specular = _SpecPower / 128.0;
-            so.Gloss = _Glossiness;
+            so.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
+            so.Gloss = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
             // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
         #    else
         #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
@@ -986,8 +987,8 @@ Shader "Custom/#SCRIPTNAME#"
             const half3 diffuse = lightCol * pow(nDotL * 0.5 + 0.5, 2.0);  // will be mul instruction.
 
             // Specular reflection.
-            // const half3 specular = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), _SpecPower) * _SpecColor.rgb * lightCol;
-            const half3 specular = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), _SpecPower) * _SpecColor.rgb * lightCol;
+            // const half3 specular = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower)) * _SpecColor.rgb * lightCol;
+            const half3 specular = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower)) * _SpecColor.rgb * lightCol;
 
             // Ambient color.
         #if UNITY_SHOULD_SAMPLE_SH
@@ -1617,7 +1618,9 @@ Shader "Custom/#SCRIPTNAME#"
 
             const float3 indirect = LightVolumeEvaluate(worldNormal, L0, L1r, L1g, L1b) * albedo;
         #    if defined(_LIGHTING_UNITY_STANDARD)
-            emission = indirect * (1.0 - _Metallic * _Metallic);
+            float metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+            metallic *= metallic;
+            emission = indirect - indirect * metallic;
         #    else
             emission = indirect;
         #    endif  // defined(_LIGHTING_UNITY_STANDARD)
@@ -1628,10 +1631,11 @@ Shader "Custom/#SCRIPTNAME#"
         #        else
         #            define LVSpecular LightVolumeSpecular
         #        endif  // defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+            const float glossiness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
         #        if defined(_LIGHTING_UNITY_STANDARD)
-            emission += LVSpecular(albedo, _Glossiness, _Metallic * _Metallic, worldNormal, worldViewDir, L0, L1r, L1g, L1b);
+            emission += LVSpecular(albedo, glossiness, metallic, worldNormal, worldViewDir, L0, L1r, L1g, L1b);
         #        else
-            emission += LVSpecular(albedo, _Glossiness, worldNormal, worldViewDir, L0, L1r, L1g, L1b);
+            emission += LVSpecular(albedo, glossiness, worldNormal, worldViewDir, L0, L1r, L1g, L1b);
         #        endif  // defined(_LIGHTING_UNITY_STANDARD)
         #        undef LVSpecular
         #    endif  // (defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && (defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG))
@@ -1915,7 +1919,7 @@ Shader "Custom/#SCRIPTNAME#"
                 gb.emission = float4((ro.rayLength / _DebugRayLengthDiv).xxx, 1.0);
             #else
                 gb.emission = calcLightingDeferred(
-                    _Color,
+                    UNITY_ACCESS_INSTANCED_PROP(Props, _Color),
                     worldFinalPos,
                     worldNormal,
                     1.0,
@@ -1999,8 +2003,8 @@ Shader "Custom/#SCRIPTNAME#"
                 so.Albedo = color.rgb;
                 so.Normal = worldNormal;
                 so.Emission = half3(0.0, 0.0, 0.0);
-                so.Metallic = _Metallic;
-                so.Smoothness = _Glossiness;
+                so.Metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+                so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
                 so.Occlusion = 1.0;
                 so.Alpha = color.a;
             #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
@@ -2012,7 +2016,7 @@ Shader "Custom/#SCRIPTNAME#"
                 so.Specular = _SpecColor.rgb;
                 so.Normal = worldNormal;
                 so.Emission = half3(0.0, 0.0, 0.0);
-                so.Smoothness = _Glossiness;
+                so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
                 so.Occlusion = 1.0;
                 so.Alpha = color.a;
             #else
@@ -2024,8 +2028,8 @@ Shader "Custom/#SCRIPTNAME#"
             #    if defined(_LIGHTING_UNITY_BLINN_PHONG)
             #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
             #        define LightingUnity_Deferred(so, worldViewDir, gi, diffuse, specular, normal) LightingBlinnPhong_Deferred(so, worldViewDir, gi, diffuse, specular, normal)
-                so.Specular = _SpecPower / 128.0;
-                so.Gloss = _Glossiness;
+                so.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
+                so.Gloss = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
                 // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
             #    else
             #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
@@ -2082,8 +2086,8 @@ Shader "Custom/#SCRIPTNAME#"
                 const half3 diffuseColor = lightCol * pow(nDotL * 0.5 + 0.5, 2.0);  // will be mul instruction.
 
                 // Specular reflection.
-                // const half3 specularColor = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), _SpecPower) * _SpecColor.rgb * lightCol;
-                const half3 specularColor = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), _SpecPower) * _SpecColor.rgb * lightCol;
+                // const half3 specularColor = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower)) * _SpecColor.rgb * lightCol;
+                const half3 specularColor = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower)) * _SpecColor.rgb * lightCol;
 
                 // Ambient color.
             #if UNITY_SHOULD_SAMPLE_SH
@@ -2091,7 +2095,7 @@ Shader "Custom/#SCRIPTNAME#"
             #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
 
                 diffuse = half4((diffuseColor + ambient) * color.rgb, 1.0);
-                specular = half4(specularColor, _Glossiness);
+                specular = half4(specularColor, UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness));
                 normal = half4(worldNormal * 0.5 + 0.5, 1.0);
                 return half4(0.0, 0.0, 0.0, 0.0);
             }
