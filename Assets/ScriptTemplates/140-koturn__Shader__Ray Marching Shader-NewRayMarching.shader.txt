@@ -27,7 +27,7 @@ Shader "Custom/#SCRIPTNAME#"
         [KeywordEnum(Object, World)]
         _CalcSpace ("Calculation space", Int) = 0
 
-        [ToggleOff(_SVDEPTH_OFF)]
+        [KeywordEnum(Off, On, LessEqual, GreaterEqual)]
         _SVDepth ("SV_Depth ouput", Int) = 1
 
         [KeywordEnum(None, Simple, Max Length)]
@@ -215,18 +215,34 @@ Shader "Custom/#SCRIPTNAME#"
         }
 
         CGINCLUDE
-        #pragma target 3.0
+        #pragma target 5.0
 
         #pragma multi_compile_instancing
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
         #pragma shader_feature_local _ASSUMEINSIDE_NONE _ASSUMEINSIDE_SIMPLE _ASSUMEINSIDE_MAX_LENGTH
         #pragma shader_feature_local _CLIPLENGTHMODE_USE_PROPERTY_VALUE _CLIPLENGTHMODE_CAMERA_CLIP _CLIPLENGTHMODE_DEPTH_TEXTURE
-        #pragma shader_feature_local_fragment _ _SVDEPTH_OFF
+        #pragma shader_feature_local_fragment _SVDEPTH_OFF _SVDEPTH_ON _SVDEPTH_LESSEQUAL _SVDEPTH_GREATEREQUAL
         #pragma shader_feature_local_fragment _CULL_OFF _CULL_FRONT _CULL_BACK
         #pragma shader_feature_local_fragment _STEPMETHOD_NORMAL _STEPMETHOD_OVER_RELAX _STEPMETHOD_ACCELARATION _STEPMETHOD_AUTO_RELAX
         // #pragma shader_feature_local_fragment _ _ALPHATEST_ON
 
         #define OPTIMIZE_BOX_PROJECTION 1
+
+        #if defined(_SVDEPTH_ON)
+        #    define DEPTH_SEMANTICS SV_Depth
+        #elif defined(_SVDEPTH_LESSEQUAL)
+        #    if SHADER_TARGET >= 45
+        #        define DEPTH_SEMANTICS SV_DepthLessEqual
+        #    else
+        #        define DEPTH_SEMANTICS SV_Depth
+        #    endif  // SHADER_TARGET >= 45
+        #elif defined(_SVDEPTH_GREATEREQUAL)
+        #    if SHADER_TARGET >= 45
+        #        define DEPTH_SEMANTICS SV_DepthGreaterEqual
+        #    else
+        #        define DEPTH_SEMANTICS SV_Depth
+        #    endif  // SHADER_TARGET >= 45
+        #endif  // defined(_SVDEPTH_ON)
 
         #include "UnityCG.cginc"
         #include "UnityStandardUtils.cginc"
@@ -381,15 +397,10 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Output color of the pixel.
             half4 color : SV_Target;
-        #if (!defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)) && !defined(_SVDEPTH_OFF)
-        #    if SHADER_TARGET >= 45
+        #if defined(DEPTH_SEMANTICS) && (!defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX))
             //! Depth of the pixel.
-            float depth : SV_DepthLessEqual;
-        #    else
-            //! Depth of the pixel.
-            float depth : SV_Depth;
-        #    endif  // SHADER_TARGET >= 45
-        #endif  // (!defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX)) && !defined(_SVDEPTH_OFF)
+            float depth : DEPTH_SEMANTICS;
+        #endif  // defined(DEPTH_SEMANTICS) && (!defined(SHADOWS_CUBE) || defined(SHADOWS_CUBE_IN_DEPTH_TEX))
         };
 
         /*!
@@ -534,13 +545,13 @@ Shader "Custom/#SCRIPTNAME#"
         #        endif  // defined(_CALCSPACE_WORLD)
                 fo.color = _BackgroundColor;
                 UNITY_APPLY_FOG(clipPos.z, color);
-        #        if !defined(_SVDEPTH_OFF)
+        #        if defined(DEPTH_SEMANTICS)
         #            if defined(_BACKGROUNDDEPTH_MESH)
                 fo.depth = getDepth(clipPos);
         #            else
                 fo.depth = kFarClipPlaneDepth;
         #            endif  // defined(_BACKGROUNDDEPTH_MESH)
-        #        endif  // !defined(_SVDEPTH_OFF)
+        #        endif  // defined(DEPTH_SEMANTICS)
                 return fo;
         #    else
                 discard;
@@ -591,9 +602,9 @@ Shader "Custom/#SCRIPTNAME#"
         #else
             fo.color = color;
         #endif  // defined(_DEBUGVIEW_STEP)
-        #if !defined(_SVDEPTH_OFF)
+        #if defined(DEPTH_SEMANTICS)
             fo.depth = getDepth(clipPos);
-        #endif  // !defined(_SVDEPTH_OFF)
+        #endif  // defined(DEPTH_SEMANTICS)
 
             return fo;
         }
@@ -1808,15 +1819,10 @@ Shader "Custom/#SCRIPTNAME#"
                 half4 normal : SV_Target2;
                 //! Emission. (rgb: emission, a: unused)
                 half4 emission : SV_Target3;
-            #if !defined(_SVDEPTH_OFF)
-            #    if SHADER_TARGET >= 45
+            #if defined(DEPTH_SEMANTICS)
                 //! Depth of the pixel.
-                float depth : SV_DepthLessEqual;
-            #    else
-                //! Depth of the pixel.
-                float depth : SV_Depth;
-            #    endif  // SHADER_TARGET >= 45
-            #endif  // !defined(_SVDEPTH_OFF)
+                float depth : DEPTH_SEMANTICS;
+            #endif  // defined(DEPTH_SEMANTICS)
             };
 
 
@@ -1870,13 +1876,13 @@ Shader "Custom/#SCRIPTNAME#"
                     gb.emission.rgb = _BackgroundColor.rgb;
                     gb.diffuse.a = 1.0;
                     // gb.normal.rgb = (0.0).xxx;
-            #        if !defined(_SVDEPTH_OFF)
+            #        if defined(DEPTH_SEMANTICS)
             #            if defined(_BACKGROUNDDEPTH_MESH)
                     gb.depth = getDepth(clipPos);
             #            else
                     gb.depth = kFarClipPlaneDepth;
             #            endif  // defined(_BACKGROUNDDEPTH_MESH)
-            #        endif  // !defined(_SVDEPTH_OFF)
+            #        endif  // defined(DEPTH_SEMANTICS)
                     return gb;
             #    else
                     discard;
@@ -1925,10 +1931,10 @@ Shader "Custom/#SCRIPTNAME#"
                     /* out */ gb.normal);
             #endif  // defined(_DEBUGVIEW_STEP)
 
-            #if !defined(_SVDEPTH_OFF)
+            #if defined(DEPTH_SEMANTICS)
                 const float4 clipPos = UnityWorldToClipPos(worldFinalPos);
                 gb.depth = getDepth(clipPos);
-            #endif  // !defined(_SVDEPTH_OFF)
+            #endif  // defined(DEPTH_SEMANTICS)
 
                 return gb;
             }
@@ -2304,9 +2310,9 @@ Shader "Custom/#SCRIPTNAME#"
                 //
                 fout fo;
                 fo.color = float4(0.0, 0.0, 0.0, 0.0);
-            #    if !defined(_SVDEPTH_OFF)
+            #    if defined(DEPTH_SEMANTICS)
                 fo.depth = getDepth(clipPos);
-            #    endif  // !defined(_SVDEPTH_OFF)
+            #    endif  // defined(DEPTH_SEMANTICS)
                 return fo;
             #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
             }
