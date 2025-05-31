@@ -366,9 +366,6 @@ Shader "Custom/#SCRIPTNAME#"
         #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
             //! Lightmap and Dynamic Lightmap coordinate.
             float4 lmap: TEXCOORD5;
-        #elif defined(UNITY_SHOULD_SAMPLE_SH)
-            //! Ambient light color.
-            half3 ambient: TEXCOORD6;
         #endif  // defined(LIGHTMAP_ON)
             //! Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -566,7 +563,7 @@ Shader "Custom/#SCRIPTNAME#"
         #    else
             const float4 lmap = float4(fi.lmap.xy, 0.0, 0.0);
         #    endif  // defined(DYNAMICLIGHTMAP_ON)
-        #elif defined(UNITY_SHOULD_SAMPLE_SH)
+        #elif UNITY_SHOULD_SAMPLE_SH
             const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
         #else
             const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
@@ -993,7 +990,7 @@ Shader "Custom/#SCRIPTNAME#"
             // Ambient color.
         #if UNITY_SHOULD_SAMPLE_SH
             ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
-        #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
+        #endif  // UNITY_SHOULD_SAMPLE_SH
 
             const half4 outColor = half4((diffuse + ambient) * color.rgb + specular, color.a);
 
@@ -1061,7 +1058,7 @@ Shader "Custom/#SCRIPTNAME#"
             giInput.ambient = ambient;
         #else
             giInput.ambient = half3(0.0, 0.0, 0.0);
-        #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
+        #endif  // UNITY_SHOULD_SAMPLE_SH
 
         #if !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
             giInput.probeHDR[0] = unity_SpecCube0_HDR;
@@ -1902,7 +1899,7 @@ Shader "Custom/#SCRIPTNAME#"
             #    else
                 const float4 lmap = float4(fi.lmap.xy, 0.0, 0.0);
             #    endif  // defined(DYNAMICLIGHTMAP_ON)
-            #elif defined(UNITY_SHOULD_SAMPLE_SH)
+            #elif UNITY_SHOULD_SAMPLE_SH
                 const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
             #else
                 const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
@@ -2090,7 +2087,7 @@ Shader "Custom/#SCRIPTNAME#"
                 // Ambient color.
             #if UNITY_SHOULD_SAMPLE_SH
                 ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
-            #endif  // defined(UNITY_SHOULD_SAMPLE_SH)
+            #endif  // UNITY_SHOULD_SAMPLE_SH
 
                 diffuse = half4((diffuseColor + ambient) * color.rgb, 1.0);
                 specular = half4(specularColor, UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness));
