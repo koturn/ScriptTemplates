@@ -1,0 +1,485 @@
+Shader "Custom/#SCRIPTNAME#"
+{
+    Properties
+    {
+        _MainTex ("Albedo (RGB)", 2D) = "white" {}
+
+        _Color ("Color", Color) = (1.0, 1.0, 1.0, 1.0)
+
+        _EmissionMap ("Emission", 2D) = "white" {}
+
+        [HDR]
+        _EmissionColor ("Emission Color", Color) = (0.0, 0.0, 0.0, 1.0)
+
+        _BumpMap ("Normal map", 2D) = "bump" {}
+
+        _BumpScale ("Normal Power", Float) = 1.0
+
+        _OcclusionMap ("Occlusion", 2D) = "white" {}
+
+        _OcclusionStrength ("Occlusion Strength", Range(0.0, 1.0)) = 1.0
+
+        _ParallaxMap ("Height Map", 2D) = "black" {}
+
+        _Parallax ("Height Scale", Range (0.005, 0.08)) = 0.02
+
+        // ------------------------------------------------------------
+        [Header(Lighting Parameters)]
+        [Space(8)]
+        [KeywordEnum(Unity Lambert, Unity Blinn Phong, Unity Standard, Unity Standard Specular, Unlit)]
+        _Lighting ("Lighting method", Int) = 2
+
+        _Glossiness ("Smoothness", Range(0.0, 1.0)) = 0.5
+
+        _MetallicGlossMap ("Metallic map", 2D) = "white" {}
+
+        [Gamma]
+        _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
+
+        _SpecColor ("Specular Color", Color) = (0.5, 0.5, 0.5, 1.0)
+        _SpecPower ("Specular Power", Range(0.0, 128.0)) = 16.0
+
+        [KeywordEnum(Off, On, Additive Only)]
+        _VRCLightVolumes ("VRC Light Volumes", Int) = 1
+
+        [KeywordEnum(Off, On, Dominant Dir)]
+        _VRCLightVolumesSpecular ("VRC Light Volumes Specular", Int) = 0
+
+        [Toggle(_LTCGI_ON)]
+        _LTCGI ("LTCGI", Int) = 0
+
+
+        // ------------------------------------------------------------
+        [Header(Rendering Parameters)]
+        [Space(8)]
+
+        [Enum(UnityEngine.Rendering.CullMode)]
+        _Cull ("Culling Mode", Int) = 2  // Default: Back
+
+        // [HideInInspector]
+        // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
+        // _Mode ("Rendering Mode", Int) = 2
+
+        [Toggle(_ALPHATEST_ON)]
+        _AlphaTest ("Alpha test", Int) = 0
+
+        _Cutoff ("Alpha Cutoff", Range (0.0, 1.0)) = 0.5
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlend ("Blend Source Factor", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlend ("Blend Destination Factor", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlendAlpha ("Blend Source Factor for Alpha", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlendAlpha ("Blend Destination Factor for Alpha", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOp ("Blend Operation", Int) = 0  // Default: Add
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOpAlpha ("Blend Operation for Alpha", Int) = 0  // Default: Add
+
+        [Enum(Off, 0, On, 1)]
+        _ZWrite ("ZWrite", Int) = 1  // Default: On
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _ZTest ("ZTest", Int) = 4  // Default: LEqual
+
+        [Enum(False, 0, True, 1)]
+        _ZClip ("ZClip", Int) = 1  // Default: True
+
+        _OffsetFactor ("Offset Factor", Range(-1.0, 1.0)) = 0
+        _OffsetUnit ("Offset Units", Range(-1.0, 1.0)) = 0
+
+        [ColorMask]
+        _ColorMask ("Color Mask", Int) = 15  // Default: RGBA
+
+        [Enum(Off, 0, On, 1)]
+        _AlphaToMask ("Alpha To Mask", Int) = 0  // Default: Off
+
+
+        // ------------------------------------------------------------
+        [Header(Stencil Parameters)]
+        [Space(8)]
+
+        [IntRange]
+        _StencilRef ("Stencil Reference Value", Range(0, 255)) = 0
+
+        [IntRange]
+        _StencilReadMask ("Stencil ReadMask Value", Range(0, 255)) = 255
+
+        [IntRange]
+        _StencilWriteMask ("Stencil WriteMask Value", Range(0, 255)) = 255
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _StencilComp ("Stencil Compare Function", Int) = 8  // Default: Always
+
+        [Enum (UnityEngine.Rendering.StencilOp)]
+        _StencilPass ("Stencil Pass", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilFail ("Stencil Fail", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilZFail ("Stencil ZFail", Int) = 0  // Default: Keep
+    }
+
+    // Blend Mode  | RenderQueue   | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
+    // ------------|---------------|---------------------|--------|--------------|-----------------------|----------
+    // Opaque      | "Geometry"    | "Opaque"            | On     | One (1)      | Zero (0)              | x
+    // Cutout      | "AlphaTest"   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
+    // Fade        | "Transparent" | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
+    // Transparent | "Transparent" | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
+
+    SubShader
+    {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "Queue" = "Geometry"
+            "VRCFallback" = "StandardFade"
+            // "LTCGI" = "_LTCGI"
+        }
+
+        LOD 200
+
+        Cull [_Cull]
+        Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
+        BlendOp [_BlendOp], [_BlendOpAlpha]
+        ZWrite [_ZWrite]
+        ZTest [_ZTest]
+        ZClip [_ZClip]
+        Offset [_OffsetFactor], [_OffsetUnit]
+        ColorMask [_ColorMask]
+        AlphaToMask [_AlphaToMask]
+
+        Stencil
+        {
+            Ref [_StencilRef]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+            Comp [_StencilComp]
+            Pass [_StencilPass]
+            Fail [_StencilFail]
+            ZFail [_StencilZFail]
+        }
+
+        CGPROGRAM
+        #pragma surface surf Custom fullforwardshadows
+        #pragma target 3.0
+
+        #pragma multi_compile_instancing
+        #pragma instancing_options assumeuniformscaling
+
+        #pragma shader_feature_local _ _ALPHATEST_ON
+        #pragma shader_feature_local _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT
+        #pragma shader_feature_local _VRCLIGHTVOLUMES_OFF _VRCLIGHTVOLUMES_ON _VRCLIGHTVOLUMES_ADDITIVE_ONLY
+        #pragma shader_feature_local _VRCLIGHTVOLUMESSPECULAR_OFF _VRCLIGHTVOLUMESSPECULAR_ON _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
+        #pragma shader_feature_local _ _LTCGI_ON
+
+        // #pragma skip_variants _VRCLIGHTVOLUMES_OFF _VRCLIGHTVOLUMES_ON _VRCLIGHTVOLUMES_ADDITIVE_ONLY
+        // #pragma skip_variants _VRCLIGHTVOLUMESSPECULAR_OFF _VRCLIGHTVOLUMESSPECULAR_ON _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
+        // #pragma skip_variants _LTCGI_ON
+
+        #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #    include "UnityPBSLighting.cginc"
+        #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #if defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON ) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #    include "Packages/red.sim.lightvolumes/Shaders/LightVolumes.cginc"
+        #endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON ) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #if defined(_LTCGI_ON)
+        #    define LTCGI_AVATAR_MODE
+        #    if defined(_LIGHTING_UNITY_LAMBERT)
+        #        define LTCGI_SPECULAR_OFF
+        #    endif  // defined(_LIGHTING_UNITY_LAMBERT)
+        #    include "Packages/at.pimaker.ltcgi/Shaders/LTCGI.cginc"
+        #endif  // defined(_LTCGI_ON)
+
+        /*!
+         * Input structure for @see surf
+         */
+        struct Input
+        {
+            // UV coordinate for _MainTex.
+            float2 uv_MainTex;
+            // View direction in tangent space.
+            float3 viewDir;
+        };
+
+        #if defined(_LIGHTING_UNITY_LAMBERT) ||  defined(_LIGHTING_UNITY_BLINN_PHONG)
+        #    define SurfaceOutputCustom SurfaceOutput
+        #elif defined(_LIGHTING_UNITY_STANDARD)
+        #    define SurfaceOutputCustom SurfaceOutputStandard
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #    define SurfaceOutputCustom SurfaceOutputStandardSpecular
+        #else
+        struct SurfaceOutputCustom
+        {
+            // Diffuse color.
+            fixed3 Albedo;
+            // Tangent space normal, if written.
+            fixed3 Normal;
+            //! Emission.
+            half3 Emission;
+            //! Alpha for transparencies.
+            fixed Alpha;
+        };
+        #endif
+
+
+        //! Main texture.
+        UNITY_DECLARE_TEX2D(_MainTex);
+        //! Emission map.
+        UNITY_DECLARE_TEX2D(_EmissionMap);
+        //! Metallic map.
+        UNITY_DECLARE_TEX2D(_MetallicGlossMap);
+        //! Normal map.
+        UNITY_DECLARE_TEX2D(_BumpMap);
+        //! Occlusion map.
+        UNITY_DECLARE_TEX2D(_OcclusionMap);
+        //! Height map.
+        UNITY_DECLARE_TEX2D(_ParallaxMap);
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+        //! Color of the objects.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _Color)
+        //! Emission color.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _EmissionColor)
+        //! Alpha Cutoff.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Cutoff)
+        //! Specular power.
+        UNITY_DEFINE_INSTANCED_PROP(half, _SpecPower)
+        //! Value of smoothness.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Glossiness)
+        //! Value of Metallic.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Metallic)
+        //! Normal power.
+        UNITY_DEFINE_INSTANCED_PROP(float, _BumpScale)
+        //! Occlusion Strength.
+        UNITY_DEFINE_INSTANCED_PROP(float, _OcclusionStrength)
+        //! Height Scale.
+        UNITY_DEFINE_INSTANCED_PROP(float, _Parallax)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
+
+        float2 calcParallaxOffset(float2 uv, float3 tangentViewDir);
+        half3 calcLightVolumeEmission(half3 albedo, float3 worldPos, float3 worldNormal, float3 worldViewDir, float glossiness, float metallic);
+
+
+        /*!
+         * @brief Setup lighting parameters.
+         * @param [in] IN  Input parameter.
+         * @param [inout] o  Lighting parameters.
+         */
+        void surf(Input IN, inout SurfaceOutputCustom o)
+        {
+            const float2 uv = IN.uv_MainTex + calcParallaxOffset(IN.uv_MainTex, IN.viewDir);
+
+            const fixed4 albedo = UNITY_SAMPLE_TEX2D(_MainTex, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
+        #if defined(_ALPHATEST_ON)
+            clip(albedo.a - _Cutoff);
+        #endif  // defined(_ALPHATEST_ON)
+
+            const half3 tangentNormal = UnpackScaleNormal(UNITY_SAMPLE_TEX2D(_BumpMap, uv), UNITY_ACCESS_INSTANCED_PROP(Props, _BumpScale));
+        #if defined(_LIGHTING_UNITY_STANDARD)
+            o.Albedo = albedo.rgb;
+            o.Normal = tangentNormal;
+            o.Emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+            o.Metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+            o.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            o.Occlusion = LerpOneTo(UNITY_SAMPLE_TEX2D(_OcclusionMap, uv).g, UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength));
+            o.Alpha = albedo.a;
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            o.Albedo = albedo.rgb;
+            o.Specular = _SpecColor.rgb;
+            o.Normal = tangentNormal;
+            o.Emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+            o.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            o.Occlusion = LerpOneTo(UNITY_SAMPLE_TEX2D(_OcclusionMap, uv).g, UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength));
+            o.Alpha = albedo.a;
+        #elif defined(_LIGHTING_UNITY_LAMBERT)
+            o.Albedo = albedo.rgb;
+            o.Normal = tangentNormal;
+            o.Emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+            // o.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
+            // o.Gloss = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            o.Alpha = albedo.a;
+        #elif defined(_LIGHTING_UNITY_BLINN_PHONG)
+            o.Albedo = albedo.rgb;
+            o.Normal = tangentNormal;
+            o.Emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+            o.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
+            o.Gloss = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            o.Alpha = albedo.a;
+        #else  // Assume _LIGHTING_UNLIT
+            o.Albedo = albedo.rgb;
+            o.Alpha = albedo.a;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD)
+        }
+
+
+        /*!
+         * @brief Setup lighting parameters.
+         * @param [in] o  Input parameter.
+         * @param [in] worldViewDir  World space view direction.
+         * @param [in] gi  GI parameters.
+         */
+        half4 LightingCustom(SurfaceOutputCustom o, half3 worldViewDir, UnityGI gi)
+        {
+        #if defined(_LIGHTING_UNITY_LAMBERT)
+            return LightingLambert(o, gi);
+        #elif defined(_LIGHTING_UNITY_BLINN_PHONG)
+            return LightingBlinnPhong(o, worldViewDir, gi);
+        #elif defined(_LIGHTING_UNITY_STANDARD)
+            return LightingStandard(o, worldViewDir, gi);
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            return LightingStandardSpecular(o, worldViewDir, gi);
+        #else  // Assume _LIGHTING_UNLIT
+            return half4(o.Albedo, o.Alpha);
+        #endif  // defined(_LIGHTING_UNITY_LAMBERT)
+        }
+
+
+        /*!
+         * @brief Setup GI parameters.
+         * @param [in] o  Lighting parameters.
+         * @param [in] data  Data to setup GI parameters.
+         * @param [in,out] gi  GI parameters.
+         */
+        void LightingCustom_GI(inout SurfaceOutputCustom o, UnityGIInput data, inout UnityGI gi)
+        {
+        #if defined(_LIGHTING_UNITY_LAMBERT)
+            LightingLambert_GI(o, data, /* inout */ gi);
+        #elif defined(_LIGHTING_UNITY_BLINN_PHONG)
+            LightingBlinnPhong_GI(o, data, /* inout */ gi);
+        #elif defined(_LIGHTING_UNITY_STANDARD)
+            LightingStandard_GI(o, data, /* inout */ gi);
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            LightingStandardSpecular_GI(o, data, /* inout */ gi);
+        #else  // Assume _LIGHTING_UNLIT
+            // Do nothing.
+        #endif  // defined(_LIGHTING_UNITY_LAMBERT)
+
+        const float3 worldNormal = normalize(o.Normal);
+
+        #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        const float glossiness = o.Smoothness;
+        #elif defined(_LIGHTING_UNITY_BLINN_PHONG)
+        const float glossiness = o.Gloss;
+        #else
+        const float glossiness = 0.0;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+
+        //
+        // VRC Light Volumes
+        //
+        #if UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON) && (defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR))
+        if (_UdonLightVolumeEnabled && _UdonLightVolumeCount != 0) {
+            gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
+        #    if defined(_LIGHTING_UNITY_STANDARD)
+            const float metallic = o.Metallic;
+        #    else
+            const float metallic = 0.0;
+        #    endif  // defined(_LIGHTING_UNITY_STANDARD)
+            o.Emission += calcLightVolumeEmission(o.Albedo, data.worldPos, worldNormal, data.worldViewDir, glossiness, metallic);
+        }
+        #endif  // UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON) && (defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR))
+
+        //
+        // LTCGI
+        //
+        #if defined(_LTCGI_ON)
+            float3 ltcgiSpecular = float3(0.0, 0.0, 0.0);
+            float3 ltcgiDiffuse = float3(0.0, 0.0, 0.0);;
+            LTCGI_Contribution(
+               data.worldPos,
+               worldNormal,
+               data.worldViewDir,
+               1.0 - glossiness,
+               float2(0.0, 0.0),
+               /* inout */ ltcgiDiffuse,
+               /* inout */ ltcgiSpecular);
+        #    if defined(LTCGI_SPECULAR_OFF)
+            o.Emission += o.Albedo.rgb * ltcgiDiffuse;
+        #    else
+            o.Emission += o.Albedo.rgb * ltcgiDiffuse + ltcgiSpecular;
+        #    endif  // defined(LTCGI_SPECULAR_OFF)
+        #endif  // defined(_LTCGI_ON)
+        }
+
+
+        /*!
+         * @brief Calculate ambient of VRC Light Volumes.
+         *
+         * Same as ParallaxOffset1Step() in UnityStandardUtils.cginc.
+         *
+         * @param [in] uv  UV coordinate for Height Map.
+         * @param [in] tangentViewDir  View direction in tangent space.
+         */
+        float2 calcParallaxOffset(float2 uv, float3 tangentViewDir)
+        {
+            const float height = UNITY_ACCESS_INSTANCED_PROP(Props, _Parallax);
+            const float h = UNITY_SAMPLE_TEX2D(_ParallaxMap, uv).g * height - height * 0.5;
+            const half3 v = normalize(tangentViewDir);
+            return h * (v.xy / (v.z + 0.42));
+        }
+
+
+        /*!
+         * @brief Calculate ambient of VRC Light Volumes.
+         * @param [in] albedo  Albedo.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] worldViewDir  View direction in world space.
+         * @param [in] glossiness  Smoothness.
+         * @param [in] metallic  Metallic.
+         * @return Ambient color.
+         */
+        half3 calcLightVolumeEmission(half3 albedo, float3 worldPos, float3 worldNormal, float3 worldViewDir, float glossiness, float metallic)
+        {
+        #if defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+            half3 emission;
+
+        #    if defined(_VRCLIGHTVOLUMES_ADDITIVE)
+            float3 L0, L1r, L1g, L1b;
+            LightVolumeAdditiveSH(worldPos, /* out */ L0, /* out */ L1r, /* out */ L1g, /* out */ L1b);
+        #    elif defined(_VRCLIGHTVOLUMES_ON)
+            float3 L0, L1r, L1g, L1b;
+            LightVolumeSH(worldPos, /* out */ L0, /* out */ L1r, /* out */ L1g, /* out */ L1b);
+        #    else
+            const float3 L0 = float3(unity_SHAr.w, unity_SHAg.w, unity_SHAb.w);
+            const float3 L1r = unity_SHAr.xyz;
+            const float3 L1g = unity_SHAg.xyz;
+            const float3 L1b = unity_SHAb.xyz;
+        #    endif  // defined(_VRCLIGHTVOLUMES_ADDITIVE)
+
+            const float3 lvAmbient = LightVolumeEvaluate(worldNormal, L0, L1r, L1g, L1b) * albedo;
+            emission = lvAmbient - lvAmbient * metallic;
+
+        #    if (defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && (defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG))
+        #        if defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #            define LVSpecular LightVolumeSpecularDominant
+        #        else
+        #            define LVSpecular LightVolumeSpecular
+        #        endif  // defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+            emission += LVSpecular(albedo, glossiness, metallic, worldNormal, worldViewDir, L0, L1r, L1g, L1b);
+        #        undef LVSpecular
+        #    endif  // (defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && (defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG))
+
+            return emission;
+        #else
+            return half3(1.0, 1.0, 1.0);
+        #endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        }
+        ENDCG
+    }
+
+    FallBack "Diffuse"
+    // Fallback "Transparent/Cutout/Diffuse"
+    // Fallback "Transparent/Diffuse"
+    // CustomEditor "#SCRIPTNAME#GUI"
+}
