@@ -153,6 +153,9 @@ Shader "Custom/#SCRIPTNAME#"
         CGINCLUDE
         #pragma target 3.0
 
+        #pragma multi_compile_instancing
+        #pragma instancing_options assumeuniformscaling
+
         #pragma only_renderers d3d9 d3d11 d3d11_9x glcore gles gles3 metal vulkan xboxone ps4 n3ds wiiu switch
         #pragma fragmentoption ARB_precision_hint_fastest
 
@@ -182,21 +185,8 @@ Shader "Custom/#SCRIPTNAME#"
         UNITY_DECLARE_TEX2D(_MainTex);
         //! Tiling and offset values of _MainTex.
         uniform float4 _MainTex_ST;
-        //! Tint color for Main texture.
-        uniform float4 _Color;
-        //! Emission texture.
+        //! Emission map.
         UNITY_DECLARE_TEX2D(_EmissionMap);
-        //! Tint color for emission texture.
-        uniform float4 _EmissionColor;
-        #if defined(_ALPHATEST_ON)
-        //! Alpha Cutoff.
-        uniform float _Cutoff;
-        #endif  // defined(_ALPHATEST_ON)
-
-        //! Value of smoothness.
-        uniform half _Glossiness;
-        //! Value of Metallic.
-        uniform half _Metallic;
 
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         //! Color of light.
@@ -206,13 +196,24 @@ Shader "Custom/#SCRIPTNAME#"
         //! Specular color.
         uniform half4 _SpecColor;
         #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+        //! Color of the objects.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _Color)
+        //! Emission color.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _EmissionColor)
         //! Specular power.
-        uniform float _SpecPower;
+        UNITY_DEFINE_INSTANCED_PROP(half, _SpecPower)
+        //! Value of smoothness.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Glossiness)
+        //! Value of Metallic.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Metallic)
+        #if defined(_ALPHATEST_ON)
+        //! Alpha Cutoff.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Cutoff)
+        #endif  // defined(_ALPHATEST_ON)
+        UNITY_INSTANCING_BUFFER_END(Props)
 
-
-        // UNITY_INSTANCING_BUFFER_START(Props)
-        //     UNITY_DEFINE_INSTANCED_PROP(float, _Cutoff)
-        // UNITY_INSTANCING_BUFFER_END(Props)
 
         /*!
          * @brief Input data type for vertex shader function, vert().
@@ -286,9 +287,9 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
 
 
-        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
-        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
-        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient);
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient);
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient);
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient);
         UnityGI getGI(float3 worldPos, half atten);
         UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient);
         bool isFacing(face_t face);
@@ -334,9 +335,9 @@ Shader "Custom/#SCRIPTNAME#"
                 unity_LightColor[3].rgb,
                 unity_4LightAtten0,
                 o.worldPos,
-                v.normal);
+                o.normal);
             #    endif  // defined(VERTEXLIGHT_ON)
-            o.ambient.rgb = ShadeSHPerVertex(v.normal, o.ambient.rgb);
+            o.ambient.rgb = ShadeSHPerVertex(o.normal, o.ambient.rgb);
             #endif  // defined(LIGHTMAP_ON)
 
             // UNITY_TRANSFER_LIGHTING(o, v.uv2);
@@ -344,6 +345,7 @@ Shader "Custom/#SCRIPTNAME#"
 
             return o;
         }
+
 
         #if defined(_FLIPNORMAL_ON)
         /*!
@@ -369,7 +371,7 @@ Shader "Custom/#SCRIPTNAME#"
             fi.normal = isFacing(facing) ? fi.normal : -fi.normal;
         #endif  // defined(_FLIPNORMAL_ON)
 
-            const float4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, fi.uv) * _Color;
+            const float4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, fi.uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
         #if defined(_ALPHATEST_ON)
             clip(mainCol.a - _Cutoff);
         #endif  // defined(_ALPHATEST_ON)
@@ -391,21 +393,14 @@ Shader "Custom/#SCRIPTNAME#"
 
             UNITY_LIGHT_ATTENUATION(atten, fi, fi.worldPos);
 
-            half4 color = calcLighting(
-                mainCol,
-                fi.worldPos,
-                fi.normal,
-                atten,
-                lmap,
-                ambient);
-
-            const half4 emissionCol = UNITY_SAMPLE_TEX2D(_EmissionMap, fi.uv) * _EmissionColor;
-            color += emissionCol;
+            const half3 emission = UNITY_SAMPLE_TEX2D(_EmissionMap, fi.uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+            half4 color = calcLighting(mainCol, fi.worldPos, fi.normal, atten, emission, lmap, ambient);
 
             UNITY_APPLY_FOG(fi.fogCoord, color);
 
             return color;
         }
+
 
         /*!
          * Calculate lighting.
@@ -413,21 +408,23 @@ Shader "Custom/#SCRIPTNAME#"
          * @param [in] worldPos  World coordinate.
          * @param [in] worldNormal  Normal in world space.
          * @param [in] atten  Light attenuation.
+         * @param [in] emission  Emission color.
          * @param [in] lmap  Light map parameters.
          * @param [in] ambient  Ambient light.
          * @return Lighting applied color.
          */
-        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient)
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient)
         {
         #if defined(_LIGHTING_CUSTOM)
-            return calcLightingCustom(color, worldPos, worldNormal, atten, lmap, ambient);
+            return calcLightingCustom(color, worldPos, worldNormal, atten, emission, lmap, ambient);
         #elif defined(_LIGHTING_UNITY_LAMBERT) \
             || defined(_LIGHTING_UNITY_BLINN_PHONG) \
             || defined(_LIGHTING_UNITY_STANDARD) \
             || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
-            return calcLightingUnity(color, worldPos, worldNormal, atten, lmap, ambient);
+            return calcLightingUnity(color, worldPos, worldNormal, atten, emission, lmap, ambient);
         #else
             // assume _LIGHTING_UNLIT
+            color.rgb += emission;
             return color;
         #endif  // defined(_LIGHTING_CUSTOM)
         }
@@ -439,12 +436,22 @@ Shader "Custom/#SCRIPTNAME#"
          * @param [in] worldPos  World coordinate.
          * @param [in] worldNormal  Normal in world space.
          * @param [in] atten  Light attenuation.
+         * @param [in] emission  Emission color.
          * @param [in] lmap  Light map parameters.
          * @param [in] ambient  Ambient light.
          * @return Lighting applied color.
          */
-        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, float4 lmap, half3 ambient)
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient)
         {
+            // Uniform variable requirements:
+            //
+            // Variant                             | `_Glossiness` | `_Metallic` | `_SpecColor` | `_SpecPower`
+            // ------------------------------------|---------------|-------------|--------------|-------------
+            // `_LIGHTING_UNITY_LAMBERT`           |               |             |              |
+            // `_LIGHTING_UNITY_BLINN_PHONG`       | o             |             | o            | o
+            // `_LIGHTING_UNITY_STANDARD`          | o             | o           |              |
+            // `_LIGHTING_UNITY_STANDARD_SPECULAR` | o             |             | o            |
+
         #if defined(_LIGHTING_UNITY_STANDARD)
         #    define LightingUnity_GI(so, giInput, gi) LightingStandard_GI(so, giInput, gi)
         #    define LightingUnity(so, worldViewDir, gi) LightingStandard(so, worldViewDir, gi)
@@ -452,9 +459,9 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandard, so);
             so.Albedo = color.rgb;
             so.Normal = worldNormal;
-            so.Emission = half3(0.0, 0.0, 0.0);
-            so.Metallic = _Metallic;
-            so.Smoothness = _Glossiness;
+            so.Emission = emission;
+            so.Metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+            so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
             so.Occlusion = 1.0;
             so.Alpha = color.a;
         #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
@@ -465,8 +472,8 @@ Shader "Custom/#SCRIPTNAME#"
             so.Albedo = color.rgb;
             so.Specular = _SpecColor.rgb;
             so.Normal = worldNormal;
-            so.Emission = half3(0.0, 0.0, 0.0);
-            so.Smoothness = _Glossiness;
+            so.Emission = emission;
+            so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
             so.Occlusion = 1.0;
             so.Alpha = color.a;
         #else
@@ -474,12 +481,12 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_INITIALIZE_OUTPUT(SurfaceOutput, so);
             so.Albedo = color.rgb;
             so.Normal = worldNormal;
-            so.Emission = half3(0.0, 0.0, 0.0);
+            so.Emission = emission;
         #    if defined(_LIGHTING_UNITY_BLINN_PHONG)
         #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
         #        define LightingUnity(so, worldViewDir, gi) LightingBlinnPhong(so, worldViewDir, gi)
-            so.Specular = _SpecPower / 128.0;
-            so.Gloss = _Glossiness;
+            so.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
+            so.Gloss = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
             // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
         #    else
         #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
@@ -489,18 +496,19 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_LIGHTING_UNITY_STANDARD)
 
             UnityGI gi = getGI(worldPos, atten);
-
             const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(worldPos));
         #if defined(UNITY_PASS_FORWARDBASE)
         #    if !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
             lmap = float4(0.0, 0.0, 0.0, 0.0);
         #    endif  // !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
             UnityGIInput giInput = getGIInput(gi.light, worldPos, worldNormal, worldViewDir, atten, lmap, ambient);
-            LightingUnity_GI(so, giInput, gi);
+            LightingUnity_GI(so, giInput, /* inout */ gi);
         #endif  // defined(UNITY_PASS_FORWARDBASE)
 
             half4 col = LightingUnity(so, worldViewDir, gi);
+        #if defined(UNITY_PASS_FORWARDBASE)
             col.rgb += so.Emission;
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
 
             return col;
 
@@ -508,17 +516,19 @@ Shader "Custom/#SCRIPTNAME#"
         #undef LightingUnity
         }
 
+
         /*!
          * Calculate lighting with custom method.
          * @param [in] color  Base color.
          * @param [in] worldPos  World coordinate.
          * @param [in] worldNormal  Normal in world space.
          * @param [in] atten  Light attenuation.
+         * @param [in] emission  Emission color.
          * @param [in] lmap  Light map parameters.
          * @param [in] ambient  Ambient light.
          * @return Lighting applied color.
          */
-        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, /* unused */ float4 lmap, half3 ambient)
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, /* unused */ float4 lmap, half3 ambient)
         {
             const float3 worldViewDir = normalize(_WorldSpaceCameraPos - worldPos);
         #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
@@ -533,18 +543,21 @@ Shader "Custom/#SCRIPTNAME#"
             const half3 diffuse = lightCol * pow(nDotL * 0.5 + 0.5, 2.0);  // will be mul instruction.
 
             // Specular reflection.
-            // const half3 specular = pow(max(0.0, dot(normalize(worldLightDir + worldViewDir), worldNormal)), _SpecPower) * _SpecColor.rgb * lightCol;
-            const half3 specular = pow(max(0.0, dot(reflect(-worldLightDir, worldNormal), worldViewDir)), _SpecPower) * _SpecColor.rgb * lightCol;
+            // const float3 rDotV = dot(normalize(worldLightDir + worldViewDir), worldNormal);  // Half-Vector
+            const float3 rDotV = dot(reflect(-worldLightDir, worldNormal), worldViewDir);
+            const float specPower = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower);
+            const half3 specular = pow(max(0.0, rDotV), specPower) * _SpecColor.rgb * lightCol;
 
             // Ambient color.
         #if UNITY_SHOULD_SAMPLE_SH
             ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
         #endif  // UNITY_SHOULD_SAMPLE_SH
 
-            const half4 outColor = half4((diffuse + ambient) * color.rgb + specular, color.a);
+            const half4 outColor = half4((diffuse + ambient) * color.rgb + specular + emission, color.a);
 
             return outColor;
         }
+
 
         /*!
          * @brief Get initial instance of UnityGI.
@@ -571,6 +584,7 @@ Shader "Custom/#SCRIPTNAME#"
 
             return gi;
         }
+
 
         /*!
          * @brief Get initial instance of UnityGIInput.
@@ -622,6 +636,7 @@ Shader "Custom/#SCRIPTNAME#"
             return giInput;
         }
 
+
         /*!
          * @brief Identify whether surface is facing the camera or facing away from the camera.
          * @param [in] facing  Facing variable (fixed or bool).
@@ -635,6 +650,7 @@ Shader "Custom/#SCRIPTNAME#"
             return facing;
         #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
         }
+
 
         /*!
          * @brief Obtain reflection direction considering box projection.
@@ -847,6 +863,7 @@ Shader "Custom/#SCRIPTNAME#"
 
                 return o;
             }
+
 
             /*!
              * @brief Fragment shader function for ShadowCaster pass.
