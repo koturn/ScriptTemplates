@@ -2,27 +2,69 @@ Shader "Custom/#SCRIPTNAME#"
 {
     Properties
     {
+        // ------------------------------------------------------------
+        [Header(Lighting Parameters)]
+        [Space(8)]
         _MainTex ("Main texture", 2D) = "white" {}
 
         _Color ("Tint color for Main texture", Color) = (1.0, 1.0, 1.0, 1.0)
 
+        [Toggle(_EMISSIONMAP)]
+        _UseEmission ("Use Emission", Int) = 0
+
+        [NoScaleOffset]
         _EmissionMap ("Emission texture", 2D) = "white" {}
 
         [HDR]
         _EmissionColor ("Tint color for emission texture", Color) = (0.0, 0.0, 0.0, 1.0)
 
+        [Toggle(_NORMALMAP)]
+        _UseBumpMap ("Use Normal map", Int) = 1
 
-        // ------------------------------------------------------------
-        [Header(Lighting Parameters)]
-        [Space(8)]
+        [NoScaleOffset]
+        _BumpMap ("Normal map", 2D) = "bump" {}
+
+        _BumpScale ("Normal Power", Float) = 1.0
+
+        [NoScaleOffset]
+        _OcclusionMap ("Occlusion", 2D) = "white" {}
+
+        _OcclusionStrength ("Occlusion Strength", Range(0.0, 1.0)) = 1.0
+
+        [Toggle(_PARALLAXMAP)]
+        _UseParallax ("Use Parallax", Int) = 1
+
+        [NoScaleOffset]
+        _ParallaxMap ("Height Map", 2D) = "black" {}
+
+        _Parallax ("Height Scale", Range (0.005, 0.08)) = 0.02
 
         [KeywordEnum(Unity Lambert, Unity Blinn Phong, Unity Standard, Unity Standard Specular, Unlit, Custom)]
         _Lighting ("Lighting method", Int) = 0
 
+        [Toggle(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)]
+        _SmoothnessTextureChannel ("Use alpha to smoothness", Int) = 0
+
+        [Toggle(_METALLICGLOSSMAP)]
+        _UseMetallicGlossMap ("Use metallic gloss map", Int) = 0
+
+        [NoScaleOffset]
+        _MetallicGlossMap ("Metallic map", 2D) = "white" {}
+
+        [Toggle(_SPECGLOSSMAP)]
+        _UseSpecGlossMap ("Use specular gloss map", Int) = 0
+
+        [NoScaleOffset]
+        _SpecGlossMap ("Specular map", 2D) = "white" {}
+
+        _GlossMapScale ("Smoothness Factor", Range(0.0, 1.0)) = 1.0
+
         _Glossiness ("Smoothness", Range(0.0, 1.0)) = 0.5
+
+        [Gamma]
         _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
 
-        _SpecColor ("Specular Color", Color) = (0.5, 0.5, 0.5, 1.0)
+        _SpecColor ("Specular Color", Color) = (0.2, 0.2, 0.2, 1.0)
         _SpecPower ("Specular Power", Range(0.0, 128.0)) = 16.0
 
 
@@ -161,7 +203,6 @@ Shader "Custom/#SCRIPTNAME#"
 
         #pragma shader_feature_local_fragment _ _FLIPNORMAL_ON
         #pragma shader_feature_local_fragment _ _ALPHATEST_ON
-        #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
         #if defined(SHADER_API_D3D11_9X)
         #    undef _FLIPNORMAL_ON
@@ -187,6 +228,14 @@ Shader "Custom/#SCRIPTNAME#"
         uniform float4 _MainTex_ST;
         //! Emission map.
         UNITY_DECLARE_TEX2D(_EmissionMap);
+        //! Metallic map.
+        UNITY_DECLARE_TEX2D(_MetallicGlossMap);
+        //! Normal map.
+        UNITY_DECLARE_TEX2D(_BumpMap);
+        //! Occlusion map.
+        UNITY_DECLARE_TEX2D(_OcclusionMap);
+        //! Height map.
+        UNITY_DECLARE_TEX2D(_ParallaxMap);
 
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         //! Color of light.
@@ -194,7 +243,7 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
         //! Specular color.
-        uniform half4 _SpecColor;
+        uniform half3 _SpecColor;
         #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
 
         UNITY_INSTANCING_BUFFER_START(Props)
@@ -204,10 +253,18 @@ Shader "Custom/#SCRIPTNAME#"
         UNITY_DEFINE_INSTANCED_PROP(half4, _EmissionColor)
         //! Specular power.
         UNITY_DEFINE_INSTANCED_PROP(half, _SpecPower)
+        //! Smoothness Factor.
+        UNITY_DEFINE_INSTANCED_PROP(half, _GlossMapScale)
         //! Value of smoothness.
         UNITY_DEFINE_INSTANCED_PROP(half, _Glossiness)
         //! Value of Metallic.
         UNITY_DEFINE_INSTANCED_PROP(half, _Metallic)
+        //! Normal power.
+        UNITY_DEFINE_INSTANCED_PROP(float, _BumpScale)
+        //! Occlusion Strength.
+        UNITY_DEFINE_INSTANCED_PROP(float, _OcclusionStrength)
+        //! Height Scale.
+        UNITY_DEFINE_INSTANCED_PROP(float, _Parallax)
         #if defined(_ALPHATEST_ON)
         //! Alpha Cutoff.
         UNITY_DEFINE_INSTANCED_PROP(half, _Cutoff)
@@ -226,6 +283,10 @@ Shader "Custom/#SCRIPTNAME#"
             // float4 tangent : TANGENT;
             //! Normal vector of the vertex.
             float3 normal : NORMAL;
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! Tangent vector of the vertex.
+            float4 tangent : TANGENT;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
             //! UV coordinate of the vertex.
             float4 texcoord : TEXCOORD0;
         #if defined(LIGHTMAP_ON)
@@ -253,24 +314,30 @@ Shader "Custom/#SCRIPTNAME#"
             float2 uv : TEXCOORD0;
             //! World space position.
             float3 worldPos: TEXCOORD1;
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! World space tangent.
+            float3 worldTangent : TEXCOORD2;
+            //! World space Binormal.
+            float3 worldBinormal : TEXCOORD3;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
             //! World space normal.
-            float3 normal : TEXCOORD2;
+            float3 worldNormal : TEXCOORD4;
         #if defined(LIGHTMAP_ON)
         #    if defined(DYNAMICLIGHTMAP_ON)
             //! Lightmap and Dynamic Lightmap coordinate.
-            float4 lmap: TEXCOORD3;
+            float4 lmap: TEXCOORD5;
         #    else
             //! Lightmap coordinate.
-            float2 lmap: TEXCOORD3;
+            float2 lmap: TEXCOORD5;
         #    endif
         #elif UNITY_SHOULD_SAMPLE_SH
             //! Ambient light color.
-            half3 ambient: TEXCOORD3;
+            half3 ambient: TEXCOORD5;
         #endif  // UNITY_SHOULD_SAMPLE_SH
             //! Members abourt ligting coordinates, _LightCoord and _ShadowCoord.
-            UNITY_LIGHTING_COORDS(4, 5)
+            UNITY_LIGHTING_COORDS(6, 7)
             //! Member abourt fog coordinates, _fogCoord.
-            UNITY_FOG_COORDS(6)
+            UNITY_FOG_COORDS(8)
             //! Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
             //! Stereo target eye index for single pass instanced rendering, stereoTargetEyeIndex.
@@ -287,9 +354,11 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
 
 
-        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient);
-        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient);
-        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient);
+        float2 calcParallaxOffset(float2 uv, float3 tangentViewDir);
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, float2 uv, half atten, float4 lmap, half3 ambient);
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient);
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient);
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient);
         UnityGI getGI(float3 worldPos, half atten);
         UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient);
         bool isFacing(face_t face);
@@ -314,7 +383,12 @@ Shader "Custom/#SCRIPTNAME#"
             // o.uv = v.texcoord;
             o.uv = TRANSFORM_TEX(v.texcoord, _MainTex);
             o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-            o.normal = UnityObjectToWorldNormal(v.normal);
+
+            o.worldNormal = UnityObjectToWorldNormal(v.normal);
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            o.worldTangent = UnityObjectToWorldDir(v.tangent.xyz);
+            o.worldBinormal = cross(o.worldNormal, o.worldTangent) * v.tangent.w * unity_WorldTransformParams.w;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
 
             // Static lightmaps
             #if defined(LIGHTMAP_ON)
@@ -335,9 +409,9 @@ Shader "Custom/#SCRIPTNAME#"
                 unity_LightColor[3].rgb,
                 unity_4LightAtten0,
                 o.worldPos,
-                o.normal);
+                o.worldNormal);
             #    endif  // defined(VERTEXLIGHT_ON)
-            o.ambient.rgb = ShadeSHPerVertex(o.normal, o.ambient.rgb);
+            o.ambient.rgb = ShadeSHPerVertex(o.worldNormal, o.ambient.rgb);
             #endif  // defined(LIGHTMAP_ON)
 
             // UNITY_TRANSFER_LIGHTING(o, v.uv2);
@@ -367,11 +441,31 @@ Shader "Custom/#SCRIPTNAME#"
             UNITY_SETUP_INSTANCE_ID(fi);
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
 
+        #if defined(_PARALLAXMAP)
+            const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(fi.worldPos));
+            const float3 tangentViewDir = float3(
+                dot(fi.worldTangent, worldViewDir),
+                dot(fi.worldBinormal, worldViewDir),
+                dot(fi.worldNormal, worldViewDir));
+            const float2 uv = fi.uv + calcParallaxOffset(fi.uv, tangentViewDir);
+        #else
+            const float2 uv = fi.uv;
+        #endif  // defined(_PARALLAXMAP)
+
+        #if defined(_NORMALMAP)
+            const float3 tangentNormal = UnpackScaleNormal(
+                UNITY_SAMPLE_TEX2D(_BumpMap, uv),
+                UNITY_ACCESS_INSTANCED_PROP(Props, _BumpScale));
+            float3 worldNormal = normalize(fi.worldTangent * tangentNormal.x + fi.worldBinormal * tangentNormal.y + fi.worldNormal * tangentNormal.z);
+        #else
+            float3 worldNormal = fi.worldNormal;
+        #endif  // defined(_NORMALMAP)
+
         #if defined(_FLIPNORMAL_ON)
-            fi.normal = isFacing(facing) ? fi.normal : -fi.normal;
+            worldNormal = isFacing(facing) ? worldNormal : -worldNormal;
         #endif  // defined(_FLIPNORMAL_ON)
 
-            const float4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, fi.uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
+            const half4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
         #if defined(_ALPHATEST_ON)
             clip(mainCol.a - _Cutoff);
         #endif  // defined(_ALPHATEST_ON)
@@ -393,8 +487,7 @@ Shader "Custom/#SCRIPTNAME#"
 
             UNITY_LIGHT_ATTENUATION(atten, fi, fi.worldPos);
 
-            const half3 emission = UNITY_SAMPLE_TEX2D(_EmissionMap, fi.uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
-            half4 color = calcLighting(mainCol, fi.worldPos, fi.normal, atten, emission, lmap, ambient);
+            half4 color = calcLighting(mainCol, fi.worldPos, worldNormal, uv, atten, lmap, ambient);
 
             UNITY_APPLY_FOG(fi.fogCoord, color);
 
@@ -403,25 +496,115 @@ Shader "Custom/#SCRIPTNAME#"
 
 
         /*!
+         * @brief Calculate parallax UV offset.
+         *
+         * Same as ParallaxOffset1Step() in UnityStandardUtils.cginc.
+         *
+         * @param [in] uv  UV coordinate for Height Map.
+         * @param [in] tangentViewDir  View direction in tangent space.
+         */
+        float2 calcParallaxOffset(float2 uv, float3 tangentViewDir)
+        {
+            const float height = UNITY_ACCESS_INSTANCED_PROP(Props, _Parallax);
+            const float h = UNITY_SAMPLE_TEX2D(_ParallaxMap, uv).g * height - height * 0.5;
+            const half3 v = normalize(tangentViewDir);
+            return h * (v.xy / (v.z + 0.42));
+        }
+
+
+        /*!
          * Calculate lighting.
          * @param [in] color  Base color.
          * @param [in] worldPos  World coordinate.
          * @param [in] worldNormal  Normal in world space.
+         * @param [in] uv  UV coordinate for _EmissionMap and _MetallicGlossMapa.
          * @param [in] atten  Light attenuation.
-         * @param [in] emission  Emission color.
          * @param [in] lmap  Light map parameters.
          * @param [in] ambient  Ambient light.
          * @return Lighting applied color.
          */
-        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient)
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, float2 uv, half atten, float4 lmap, half3 ambient)
+        {
+        #if defined(_EMISSIONMAP)
+            const half3 emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+        #else
+            const half3 emission = half3(0.0, 0.0, 0.0);
+        #endif  // defined(_EMISSIONMAP)
+
+        #if defined(_LIGHTING_UNITY_STANDARD)
+        #    if defined(_METALLICGLOSSMAP)
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half metallic = UNITY_SAMPLE_TEX2D(_MetallicGlossMap, uv).r;
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half2 mg = UNITY_SAMPLE_TEX2D(_MetallicGlossMap, uv).ra;
+            const half metallic = mg.r;
+            const half glossiness = mg.g * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+        #    else
+            const half metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half glossiness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+        #    endif  // defined(_METALLICGLOSSMAP)
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG)
+            const half metallic = 0.0;
+        #    if defined(_SPECGLOSSMAP)
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half3 sg = UNITY_SAMPLE_TEX2D(_SpecGlossMap, uv).rgb;
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half4 sg = UNITY_SAMPLE_TEX2D(_SpecGlossMap, uv);
+            const half glossiness = sg.a * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            _SpecColor.rgb = sg.rgb;
+        #    else
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half glossiness = _Glossiness;
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+        #    endif  // defined(_SPECGLOSSMAP)
+        #else
+            const half metallic = 0.0;
+            const half glossiness = 0.0;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD)
+
+        #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            const half occlusion = LerpOneTo(UNITY_SAMPLE_TEX2D(_OcclusionMap, uv).g, UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength));
+        #else
+            const half occlusion = 0.0;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+
+            return calcLighting(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
+        }
+
+
+        /*!
+         * Calculate lighting.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] emission  Emission color.
+         * @param [in] glossiness  Glossiness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient)
         {
         #if defined(_LIGHTING_CUSTOM)
-            return calcLightingCustom(color, worldPos, worldNormal, atten, emission, lmap, ambient);
+            return calcLightingCustom(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
         #elif defined(_LIGHTING_UNITY_LAMBERT) \
             || defined(_LIGHTING_UNITY_BLINN_PHONG) \
             || defined(_LIGHTING_UNITY_STANDARD) \
             || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
-            return calcLightingUnity(color, worldPos, worldNormal, atten, emission, lmap, ambient);
+            return calcLightingUnity(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
         #else
             // assume _LIGHTING_UNLIT
             color.rgb += emission;
@@ -435,13 +618,16 @@ Shader "Custom/#SCRIPTNAME#"
          * @param [in] color  Base color.
          * @param [in] worldPos  World coordinate.
          * @param [in] worldNormal  Normal in world space.
-         * @param [in] atten  Light attenuation.
          * @param [in] emission  Emission color.
+         * @param [in] glossiness  Glossiness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @param [in] atten  Light attenuation.
          * @param [in] lmap  Light map parameters.
          * @param [in] ambient  Ambient light.
          * @return Lighting applied color.
          */
-        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, float4 lmap, half3 ambient)
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient)
         {
             // Uniform variable requirements:
             //
@@ -462,7 +648,7 @@ Shader "Custom/#SCRIPTNAME#"
             so.Emission = emission;
             so.Metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
             so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
-            so.Occlusion = 1.0;
+            so.Occlusion = occlusion;
             so.Alpha = color.a;
         #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
         #    define LightingUnity_GI(so, giInput, gi) LightingStandardSpecular_GI(so, giInput, gi)
@@ -474,7 +660,7 @@ Shader "Custom/#SCRIPTNAME#"
             so.Normal = worldNormal;
             so.Emission = emission;
             so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
-            so.Occlusion = 1.0;
+            so.Occlusion = occlusion;
             so.Alpha = color.a;
         #else
             SurfaceOutput so;
@@ -522,13 +708,16 @@ Shader "Custom/#SCRIPTNAME#"
          * @param [in] color  Base color.
          * @param [in] worldPos  World coordinate.
          * @param [in] worldNormal  Normal in world space.
-         * @param [in] atten  Light attenuation.
          * @param [in] emission  Emission color.
+         * @param [in] glossiness  Glossiness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @param [in] atten  Light attenuation.
          * @param [in] lmap  Light map parameters.
          * @param [in] ambient  Ambient light.
          * @return Lighting applied color.
          */
-        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half atten, half3 emission, /* unused */ float4 lmap, half3 ambient)
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient)
         {
             const float3 worldViewDir = normalize(_WorldSpaceCameraPos - worldPos);
         #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
@@ -698,6 +887,13 @@ Shader "Custom/#SCRIPTNAME#"
             CGPROGRAM
             #pragma multi_compile_fwdbase
             #pragma multi_compile_fog
+            #pragma shader_feature_local _ _NORMALMAP
+            #pragma shader_feature_local _ _PARALLAXMAP
+            #pragma shader_feature_local_fragment _ _EMISSIONMAP
+            #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
+            #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
+            #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
             #pragma vertex vert
             #pragma fragment frag
@@ -721,6 +917,12 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma multi_compile_fwdadd_fullshadow
             #pragma multi_compile_fog
             #pragma shader_feature_local _ _NOFORWARDADD_ON
+            #pragma shader_feature_local _ _NORMALMAP
+            #pragma shader_feature_local _ _PARALLAXMAP
+            #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
+            #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
+            #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
             #pragma vertex vertForwardAdd
             #pragma fragment fragForwardAdd
