@@ -105,9 +105,9 @@ namespace Custom
         /// </summary>
         private const string PropNameOffsetFactor = "_OffsetFactor";
         /// <summary>
-        /// Property name of "_OffsetUnit".
+        /// Property name of "_OffsetUnits".
         /// </summary>
-        private const string PropNameOffsetUnit = "_OffsetUnit";
+        private const string PropNameOffsetUnit = "_OffsetUnits";
         /// <summary>
         /// Property name of "_ColorMask".
         /// </summary>
