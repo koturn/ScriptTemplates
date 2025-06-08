@@ -186,6 +186,14 @@ Shader "Custom/#SCRIPTNAME#"
         // #pragma skip_variants _VRCLIGHTVOLUMESSPECULAR_OFF _VRCLIGHTVOLUMESSPECULAR_ON _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
         // #pragma skip_variants _LTCGI_ON
 
+        #if defined(SHADER_TARGET_SURFACE_ANALYSIS)
+        #    undef _VRCLIGHTVOLUMES_ON
+        #    undef _VRCLIGHTVOLUMES_ADDITIVE_ONLY
+        #    undef _VRCLIGHTVOLUMESSPECULAR_ON
+        #    undef _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
+        #    undef _LTCGI_ON
+        #endif  // defined(SHADER_TARGET_SURFACE_ANALYSIS)
+
         #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
         #    include "UnityPBSLighting.cginc"
         #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
