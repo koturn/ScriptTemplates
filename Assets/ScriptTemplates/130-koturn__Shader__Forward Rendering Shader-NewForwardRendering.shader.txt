@@ -588,7 +588,7 @@ Shader "Custom/#SCRIPTNAME#"
         #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
             const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
         #        else
-            const half glossiness = _Glossiness;
+            const half glossiness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
         #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
         #    endif  // defined(_SPECGLOSSMAP)
         #else
@@ -599,7 +599,7 @@ Shader "Custom/#SCRIPTNAME#"
         #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
             const half occlusion = LerpOneTo(UNITY_SAMPLE_TEX2D(_OcclusionMap, uv).g, UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength));
         #else
-            const half occlusion = 0.0;
+            const half occlusion = UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength);
         #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
 
             return calcLighting(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
@@ -670,8 +670,8 @@ Shader "Custom/#SCRIPTNAME#"
             so.Albedo = color.rgb;
             so.Normal = worldNormal;
             so.Emission = emission;
-            so.Metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
-            so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            so.Metallic = metallic;
+            so.Smoothness = glossiness;
             so.Occlusion = occlusion;
             so.Alpha = color.a;
         #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
@@ -683,7 +683,7 @@ Shader "Custom/#SCRIPTNAME#"
             so.Specular = _SpecColor.rgb;
             so.Normal = worldNormal;
             so.Emission = emission;
-            so.Smoothness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            so.Smoothness = glossiness;
             so.Occlusion = occlusion;
             so.Alpha = color.a;
         #else
@@ -696,7 +696,7 @@ Shader "Custom/#SCRIPTNAME#"
         #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
         #        define LightingUnity(so, worldViewDir, gi) LightingBlinnPhong(so, worldViewDir, gi)
             so.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
-            so.Gloss = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+            so.Gloss = glossiness;
             // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
         #    else
         #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
@@ -918,7 +918,7 @@ Shader "Custom/#SCRIPTNAME#"
 
             return ambientAndSpecular * occlusion;
         #else
-            return half3(1.0, 1.0, 1.0);
+            return half3(0.0, 0.0, 0.0);
         #endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
         }
 
