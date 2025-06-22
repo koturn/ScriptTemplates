@@ -311,14 +311,14 @@ Shader "Custom/#SCRIPTNAME#"
             float4 tangent : TANGENT;
         #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
             //! UV coordinate of the vertex.
-            float4 texcoord : TEXCOORD0;
+            float2 texcoord : TEXCOORD0;
         #if defined(LIGHTMAP_ON)
             //! Lightmap coordinate.
-            float4 texcoord1 : TEXCOORD1;
+            float2 texcoord1 : TEXCOORD1;
         #endif  // defined(LIGHTMAP_ON)
         #if defined(DYNAMICLIGHTMAP_ON)
             //! Dynamic Lightmap coordinate.
-            float4 texcoord2 : TEXCOORD2;
+            float2 texcoord2 : TEXCOORD2;
         #endif  // defined(DYNAMICLIGHTMAP_ON)
             UNITY_VERTEX_INPUT_INSTANCE_ID
         };
