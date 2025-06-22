@@ -39,6 +39,23 @@ Shader "Custom/#SCRIPTNAME#"
 
         _Parallax ("Height Scale", Range (0.005, 0.08)) = 0.02
 
+        [NoScaleOffset]
+        _DetailMask ("Detail Mask", 2D) = "white" {}
+
+        [KeywordEnum(None, Mul, Mulx2, Add, Lerp)]
+        _Detail ("Detail mode", Int) = 1
+
+        _DetailAlbedoMap ("Detail Albedo x2", 2D) = "grey" {}
+
+        [Normal]
+        [NoScaleOffset]
+        _DetailNormalMap ("Detail Normal Map", 2D) = "bump" {}
+
+        _DetailNormalMapScale ("Detail Normal Power", Float) = 1.0
+
+        [Enum(UV0, 0, UV1, 1)]
+        _UVSec ("UV Set for secondary textures", Int) = 0
+
         [KeywordEnum(Unity Lambert, Unity Blinn Phong, Unity Standard, Unity Standard Specular, Unlit, Custom)]
         _Lighting ("Lighting method", Int) = 0
 
@@ -259,6 +276,14 @@ Shader "Custom/#SCRIPTNAME#"
         UNITY_DECLARE_TEX2D(_OcclusionMap);
         //! Height map.
         UNITY_DECLARE_TEX2D(_ParallaxMap);
+        //! Detail Mask.
+        UNITY_DECLARE_TEX2D(_DetailMask);
+        //! Detail texture.
+        UNITY_DECLARE_TEX2D(_DetailAlbedoMap);
+        //! Tiling and offset values of _DetailAlbedoMap_ST.
+        uniform float4 _DetailAlbedoMap_ST;
+        //! Detail Normal Map.
+        UNITY_DECLARE_TEX2D(_DetailNormalMap);
 
         #if !defined(UNITY_LIGHTING_COMMON_INCLUDED)
         //! Color of light.
@@ -268,6 +293,9 @@ Shader "Custom/#SCRIPTNAME#"
         //! Specular color.
         uniform half3 _SpecColor;
         #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
+
+        //! UV Set for secondary textures.
+        uniform int _UVSec;
 
         UNITY_INSTANCING_BUFFER_START(Props)
         //! Color of the objects.
@@ -288,6 +316,8 @@ Shader "Custom/#SCRIPTNAME#"
         UNITY_DEFINE_INSTANCED_PROP(float, _OcclusionStrength)
         //! Height Scale.
         UNITY_DEFINE_INSTANCED_PROP(float, _Parallax)
+        //! Detail Normal Power.
+        UNITY_DEFINE_INSTANCED_PROP(float, _DetailNormalMapScale)
         #if defined(_ALPHATEST_ON)
         //! Alpha Cutoff.
         UNITY_DEFINE_INSTANCED_PROP(half, _Cutoff)
@@ -312,7 +342,7 @@ Shader "Custom/#SCRIPTNAME#"
         #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
             //! UV coordinate of the vertex.
             float2 texcoord : TEXCOORD0;
-        #if defined(LIGHTMAP_ON)
+        #if defined(LIGHTMAP_ON) || defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
             //! Lightmap coordinate.
             float2 texcoord1 : TEXCOORD1;
         #endif  // defined(LIGHTMAP_ON)
@@ -333,8 +363,13 @@ Shader "Custom/#SCRIPTNAME#"
         {
             //! Clip space position of the vertex.
             float4 pos : SV_POSITION;
+        #if defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
+            //! UV coordinate (xy: Usual texture UV coordinate; zw: Detail map UV).
+            float4 uv : TEXCOORD0;
+        #else
             //! UV coordinate.
             float2 uv : TEXCOORD0;
+        #endif  // defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
             //! World space position.
             float3 worldPos: TEXCOORD1;
         #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
@@ -405,7 +440,10 @@ Shader "Custom/#SCRIPTNAME#"
 
             o.pos = UnityObjectToClipPos(v.vertex);
             // o.uv = v.texcoord;
-            o.uv = TRANSFORM_TEX(v.texcoord, _MainTex);
+            o.uv.xy = TRANSFORM_TEX(v.texcoord, _MainTex);
+        #if defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
+            o.uv.zw = TRANSFORM_TEX(_UVSec == 0 ? v.texcoord : v.texcoord1, _DetailAlbedoMap);
+        #endif  // defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
             o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
 
             o.worldNormal = UnityObjectToWorldNormal(v.normal);
@@ -471,15 +509,38 @@ Shader "Custom/#SCRIPTNAME#"
                 dot(fi.worldTangent, worldViewDir),
                 dot(fi.worldBinormal, worldViewDir),
                 dot(fi.worldNormal, worldViewDir));
-            const float2 uv = fi.uv + calcParallaxOffset(fi.uv, tangentViewDir);
+            const float2 parallaxOffset = calcParallaxOffset(fi.uv, tangentViewDir);
+            const float2 uv = fi.uv.xy + parallaxOffset;
+        #    if defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
+            const float2 uvDetail = fi.uv.zw + parallaxOffset;
+        #    endif  // defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
         #else
-            const float2 uv = fi.uv;
+            const float2 uv = fi.uv.xy;
+        #    if defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
+            const float2 uvDetail = fi.uv.zw;
+        #    endif  // defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
         #endif  // defined(_PARALLAXMAP)
 
+        #if (defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)) && (SHADER_TARGET >= 30 || defined(_NORMALMAP) && defined(UNITY_ENABLE_DETAIL_NORMALMAP))
+            const half detailMask = UNITY_SAMPLE_TEX2D(_DetailMask, uv).a;
+        #else
+            const half detailMask = 1.0;
+        #endif  // (defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)) && (SHADER_TARGET >= 30 || defined(_NORMALMAP) && defined(UNITY_ENABLE_DETAIL_NORMALMAP))
+
         #if defined(_NORMALMAP)
-            const float3 tangentNormal = UnpackScaleNormal(
+            float3 tangentNormal = UnpackScaleNormal(
                 UNITY_SAMPLE_TEX2D(_BumpMap, uv),
                 UNITY_ACCESS_INSTANCED_PROP(Props, _BumpScale));
+        #    if (defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)) && defined(UNITY_ENABLE_DETAIL_NORMALMAP)
+            const half3 detailNormalTangent = UnpackScaleNormal(
+                UNITY_SAMPLE_TEX2D(_DetailNormalMap, uvDetail),
+                UNITY_ACCESS_INSTANCED_PROP(Props, _DetailNormalMapScale));
+        #        if defined(_DETAIL_LERP)
+            tangentNormal = lerp(tangentNormal, detailNormalTangent, detailMask);
+        #        else
+            tangentNormal = lerp(tangentNormal, BlendNormals(tangentNormal, detailNormalTangent), detailMask);
+        #        endif  // defined(_DETAIL_LERP)
+        #    endif  // (defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)) && defined(UNITY_ENABLE_DETAIL_NORMALMAP)
             float3 worldNormal = normalize(fi.worldTangent * tangentNormal.x + fi.worldBinormal * tangentNormal.y + fi.worldNormal * tangentNormal.z);
         #else
             float3 worldNormal = fi.worldNormal;
@@ -489,7 +550,20 @@ Shader "Custom/#SCRIPTNAME#"
             worldNormal = isFacing(facing) ? worldNormal : -worldNormal;
         #endif  // defined(_FLIPNORMAL_ON)
 
-            const half4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
+            half4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
+        #if defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
+            const half3 detailAlbedo = UNITY_SAMPLE_TEX2D(_DetailAlbedoMap, uvDetail).rgb;
+        #    if defined(_DETAIL_MULX2)
+            mainCol.rgb *= LerpWhiteTo(detailAlbedo * unity_ColorSpaceDouble.rgb, detailMask);
+        #    elif defined(_DETAIL_MUL)
+            mainCol.rgb *= LerpWhiteTo(detailAlbedo, detailMask);
+        #    elif defined(_DETAIL_ADD)
+            mainCol.rgb += detailAlbedo * detailMask;
+        #    elif defined(_DETAIL_LERP)
+            mainCol.rgb = lerp(mainCol.rgb, detailAlbedo, detailMask);
+        #    endif
+        #endif  // defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
+
         #if defined(_ALPHATEST_ON)
             clip(mainCol.a - _Cutoff);
         #endif  // defined(_ALPHATEST_ON)
@@ -529,10 +603,14 @@ Shader "Custom/#SCRIPTNAME#"
          */
         float2 calcParallaxOffset(float2 uv, float3 tangentViewDir)
         {
+        #if !defined(_PARALLAXMAP) || SHADER_TARGET < 30
+            return float2(0.0, 0.0);
+        #else
             const float height = UNITY_ACCESS_INSTANCED_PROP(Props, _Parallax);
             const float h = UNITY_SAMPLE_TEX2D(_ParallaxMap, uv).g * height - height * 0.5;
             const half3 v = normalize(tangentViewDir);
             return h * (v.xy / (v.z + 0.42));
+        #endif  // !defined(_PARALLAXMAP) || SHADER_TARGET < 30
         }
 
 
@@ -986,6 +1064,7 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma multi_compile_fog
             #pragma shader_feature_local _ _NORMALMAP
             #pragma shader_feature_local _ _PARALLAXMAP
+            #pragma shader_feature_local _DETAIL_NONE _DETAIL_MULX _DETAIL_MULX2 _DETAIL_ADD _DETAIL_LERP
             #pragma shader_feature_local_fragment _ _EMISSIONMAP
             #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
@@ -1019,6 +1098,7 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma shader_feature_local _ _FORWARDADD_OFF
             #pragma shader_feature_local _ _NORMALMAP
             #pragma shader_feature_local _ _PARALLAXMAP
+            #pragma shader_feature_local _DETAIL_NONE _DETAIL_MULX _DETAIL_MULX2 _DETAIL_ADD _DETAIL_LERP
             #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
             #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
