@@ -68,6 +68,12 @@ Shader "Custom/#SCRIPTNAME#"
         [NoScaleOffset]
         _MetallicGlossMap ("Metallic map", 2D) = "white" {}
 
+        [ToggleOff(_SPECULARHIGHLIGHTS_OFF)]
+        _SpecularHighlights ("Specular Highlights", Int) = 1
+
+        [ToggleOff(_GLOSSYREFLECTIONS_OFF)]
+        _GlossyReflections ("Glossy Reflections", Int) = 1
+
         [Toggle(_SPECGLOSSMAP)]
         _UseSpecGlossMap ("Use specular gloss map", Int) = 0
 
@@ -627,11 +633,13 @@ Shader "Custom/#SCRIPTNAME#"
          */
         half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, float2 uv, half atten, float4 lmap, half3 ambient)
         {
-        #if defined(_EMISSIONMAP)
+        #if !defined(UNITY_PASS_FORWARDBASE)
+            const half3 emission = half3(0.0, 0.0, 0.0);
+        #elif defined(_EMISSIONMAP)
             const half3 emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
         #else
-            const half3 emission = half3(0.0, 0.0, 0.0);
-        #endif  // defined(_EMISSIONMAP)
+            const half3 emission = _EmissionColor;
+        #endif  // !defined(UNITY_PASS_FORWARDBASE)
 
         #if defined(_LIGHTING_UNITY_STANDARD)
         #    if defined(_METALLICGLOSSMAP)
@@ -1069,6 +1077,8 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
             #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
+            #pragma shader_feature_local_fragment _ _SPECULARHIGHLIGHTS_OFF
+            #pragma shader_feature_local_fragment _ _GLOSSYREFLECTIONS_OFF
             #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
             #pragma shader_feature_local_fragment _VRCLIGHTVOLUMES_OFF _VRCLIGHTVOLUMES_ON _VRCLIGHTVOLUMES_ADDITIVE_ONLY
             #pragma shader_feature_local_fragment _VRCLIGHTVOLUMESSPECULAR_OFF _VRCLIGHTVOLUMESSPECULAR_ON _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
@@ -1102,6 +1112,8 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
             #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
+            #pragma shader_feature_local_fragment _ _SPECULARHIGHLIGHTS_OFF
+            #pragma shader_feature_local_fragment _ _GLOSSYREFLECTIONS_OFF
             #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
 
             #pragma vertex vertForwardAdd
