@@ -438,7 +438,7 @@ Shader "Custom/#SCRIPTNAME#"
             o.ambient.rgb = ShadeSHPerVertex(o.worldNormal, o.ambient.rgb);
             #endif  // defined(LIGHTMAP_ON)
 
-            // UNITY_TRANSFER_LIGHTING(o, v.uv2);
+            UNITY_TRANSFER_LIGHTING(o, v.texcoord1);
             UNITY_TRANSFER_FOG(o, o.pos);
 
             return o;
