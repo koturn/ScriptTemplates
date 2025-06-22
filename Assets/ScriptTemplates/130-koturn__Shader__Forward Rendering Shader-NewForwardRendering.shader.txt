@@ -599,7 +599,7 @@ Shader "Custom/#SCRIPTNAME#"
         #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
             const half occlusion = LerpOneTo(UNITY_SAMPLE_TEX2D(_OcclusionMap, uv).g, UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength));
         #else
-            const half occlusion = UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength);
+            const half occlusion = 1.0;
         #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
 
             return calcLighting(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
