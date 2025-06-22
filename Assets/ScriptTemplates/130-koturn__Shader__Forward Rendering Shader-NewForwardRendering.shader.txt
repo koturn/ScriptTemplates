@@ -9,7 +9,7 @@ Shader "Custom/#SCRIPTNAME#"
 
         _Color ("Tint color for Main texture", Color) = (1.0, 1.0, 1.0, 1.0)
 
-        [Toggle(_EMISSIONMAP)]
+        [Toggle(_EMISSION)]
         _UseEmission ("Use Emission", Int) = 0
 
         [NoScaleOffset]
@@ -635,7 +635,7 @@ Shader "Custom/#SCRIPTNAME#"
         {
         #if !defined(UNITY_PASS_FORWARDBASE)
             const half3 emission = half3(0.0, 0.0, 0.0);
-        #elif defined(_EMISSIONMAP)
+        #elif defined(_EMISSION)
             const half3 emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
         #else
             const half3 emission = _EmissionColor;
@@ -1073,7 +1073,7 @@ Shader "Custom/#SCRIPTNAME#"
             #pragma shader_feature_local _ _NORMALMAP
             #pragma shader_feature_local _ _PARALLAXMAP
             #pragma shader_feature_local _DETAIL_NONE _DETAIL_MULX _DETAIL_MULX2 _DETAIL_ADD _DETAIL_LERP
-            #pragma shader_feature_local_fragment _ _EMISSIONMAP
+            #pragma shader_feature_local_fragment _ _EMISSION
             #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
             #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
             #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
@@ -1098,12 +1098,12 @@ Shader "Custom/#SCRIPTNAME#"
             }
 
             Cull [_Cull]
-            Blend One One
+            Blend [_SrcBlend] One, [_SrcBlendAlpha] One
             ZWrite Off
 
             CGPROGRAM
             // #pragma multi_compile_fwdadd
-            #pragma multi_compile_fwdadd_fullshadow
+            #pragma multi_compile_fwdadd_fullshadows
             #pragma multi_compile_fog
             #pragma shader_feature_local _ _FORWARDADD_OFF
             #pragma shader_feature_local _ _NORMALMAP
@@ -1200,7 +1200,6 @@ Shader "Custom/#SCRIPTNAME#"
 
             CGPROGRAM
             #pragma multi_compile_shadowcaster
-            #pragma multi_compile_fog
 
             #pragma vertex vertShadowCaster
             #pragma fragment fragShadowCaster
