@@ -341,7 +341,7 @@ Shader "Custom/#SCRIPTNAME#"
          */
         struct appdata
         {
-            //! Object space position of the vertex.
+            //! Object space position of the vertex (Should not be renamed because `UNITY_TRANSFER_LIGHTING` used this name!).
             float4 vertex : POSITION;
             // float4 tangent : TANGENT;
             //! Normal vector of the vertex.
@@ -371,7 +371,7 @@ Shader "Custom/#SCRIPTNAME#"
          */
         struct v2f
         {
-            //! Clip space position of the vertex.
+            //! Clip space position of the vertex (Should not be renamed because `UNITY_TRANSFER_LIGHTING` used this name!).
             float4 pos : SV_POSITION;
         #if defined(_DETAIL_MULX2) || defined(_DETAIL_MUL) || defined(_DETAIL_ADD) || defined(_DETAIL_LERP)
             //! UV coordinate (xy: Usual texture UV coordinate; zw: Detail map UV).
@@ -402,13 +402,13 @@ Shader "Custom/#SCRIPTNAME#"
             //! Ambient light color.
             half3 ambient: TEXCOORD5;
         #endif  // UNITY_SHOULD_SAMPLE_SH
-            //! Members abourt ligting coordinates, _LightCoord and _ShadowCoord.
+            // Members abourt ligting coordinates, _LightCoord and _ShadowCoord.
             UNITY_LIGHTING_COORDS(6, 7)
-            //! Member abourt fog coordinates, _fogCoord.
+            // Member abourt fog coordinates, _fogCoord.
             UNITY_FOG_COORDS(8)
-            //! Instance ID for single pass instanced rendering, instanceID.
+            // Instance ID for single pass instanced rendering, instanceID.
             UNITY_VERTEX_INPUT_INSTANCE_ID
-            //! Stereo target eye index for single pass instanced rendering, stereoTargetEyeIndex.
+            // Stereo target eye index for single pass instanced rendering, stereoTargetEyeIndex.
             UNITY_VERTEX_OUTPUT_STEREO
         };
 
@@ -446,7 +446,7 @@ Shader "Custom/#SCRIPTNAME#"
 
         /*!
          * @brief Vertex shader function.
-         * @param [in] v  Input data.
+         * @param [in] v  Input data (Should not be renamed because `UNITY_TRANSFER_LIGHTING` used this name!).
          * @return Interpolation source data for fragment shader function, frag().
          * @see frag
          */
@@ -1478,11 +1478,11 @@ Shader "Custom/#SCRIPTNAME#"
             }
 
             /*!
-             * Calculate lighting.
+             * @brief Calculate lighting.
              * @param [in] color  Base color.
              * @param [in] worldPos  World coordinate.
              * @param [in] worldNormal  Normal in world space.
-             * @param [in] uv  UV coordinate for _EmissionMap and _MetallicGlossMapa.
+             * @param [in] uv  UV coordinate for @ref _EmissionMap and @ref _MetallicGlossMap.
              * @param [in] atten  Light attenuation.
              * @param [in] lmap  Light map parameters.
              * @param [in] ambient  Ambient light.
@@ -1721,7 +1721,7 @@ Shader "Custom/#SCRIPTNAME#"
                 //! Normal vector of the vertex.
                 float3 normal : NORMAL;
             #endif
-                //! instanceID for single pass instanced rendering.
+                // instanceID for single pass instanced rendering.
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -1733,11 +1733,11 @@ Shader "Custom/#SCRIPTNAME#"
              */
             struct v2f_shadowcaster
             {
-                //! Shadow caster members.
+                // Shadow caster members.
                 V2F_SHADOW_CASTER;
-                //! instanceID for single pass instanced rendering.
+                // instanceID for single pass instanced rendering.
                 UNITY_VERTEX_INPUT_INSTANCE_ID
-                //! stereoTargetEyeIndex for single pass instanced rendering.
+                // stereoTargetEyeIndex for single pass instanced rendering.
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
