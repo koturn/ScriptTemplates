@@ -1,0 +1,1357 @@
+Shader "Custom/#SCRIPTNAME#"
+{
+    Properties
+    {
+        // ------------------------------------------------------------
+        [Header(Lighting Parameters)]
+        [Space(8)]
+        _MainTex ("Main texture", 2D) = "white" {}
+
+        _Color ("Tint color for Main texture", Color) = (1.0, 1.0, 1.0, 1.0)
+
+        [Toggle(_EMISSION)]
+        _UseEmission ("Use Emission", Int) = 0
+
+        [NoScaleOffset]
+        _EmissionMap ("Emission texture", 2D) = "white" {}
+
+        [HDR]
+        _EmissionColor ("Tint color for emission texture", Color) = (0.0, 0.0, 0.0, 1.0)
+
+        [Toggle(_NORMALMAP)]
+        _UseBumpMap ("Use Normal map", Int) = 1
+
+        [NoScaleOffset]
+        _BumpMap ("Normal map", 2D) = "bump" {}
+
+        _BumpScale ("Normal Power", Float) = 1.0
+
+        [NoScaleOffset]
+        _OcclusionMap ("Occlusion", 2D) = "white" {}
+
+        _OcclusionStrength ("Occlusion Strength", Range(0.0, 1.0)) = 1.0
+
+        [Toggle(_PARALLAXMAP)]
+        _UseParallax ("Use Parallax", Int) = 1
+
+        [NoScaleOffset]
+        _ParallaxMap ("Height Map", 2D) = "black" {}
+
+        _Parallax ("Height Scale", Range (0.005, 0.08)) = 0.02
+
+        [KeywordEnum(Unity Lambert, Unity Blinn Phong, Unity Standard, Unity Standard Specular, Unlit, Custom)]
+        _Lighting ("Lighting method", Int) = 0
+
+        [Toggle(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)]
+        _SmoothnessTextureChannel ("Use alpha to smoothness", Int) = 0
+
+        [Toggle(_METALLICGLOSSMAP)]
+        _UseMetallicGlossMap ("Use metallic gloss map", Int) = 0
+
+        [NoScaleOffset]
+        _MetallicGlossMap ("Metallic map", 2D) = "white" {}
+
+        [Toggle(_SPECGLOSSMAP)]
+        _UseSpecGlossMap ("Use specular gloss map", Int) = 0
+
+        [NoScaleOffset]
+        _SpecGlossMap ("Specular map", 2D) = "white" {}
+
+        _GlossMapScale ("Smoothness Factor", Range(0.0, 1.0)) = 1.0
+
+        _Glossiness ("Smoothness", Range(0.0, 1.0)) = 0.5
+
+        [Gamma]
+        _Metallic ("Metallic", Range(0.0, 1.0)) = 0.0
+
+        _SpecColor ("Specular Color", Color) = (0.2, 0.2, 0.2, 1.0)
+        _SpecPower ("Specular Power", Range(0.0, 128.0)) = 16.0
+
+        [KeywordEnum(Off, On, Additive Only)]
+        _VRCLightVolumes ("VRC Light Volumes", Int) = 1
+
+        [KeywordEnum(Off, On, Dominant Dir)]
+        _VRCLightVolumesSpecular ("VRC Light Volumes Specular", Int) = 0
+
+        [Toggle(_LTCGI_ON)]
+        _LTCGI ("LTCGI", Int) = 0
+
+
+        // ------------------------------------------------------------
+        [Header(Rendering Parameters)]
+        [Space(8)]
+
+        [ToggleOff(_FORWARDADD_OFF)]
+        _ForwardAdd ("Enable ForwardAdd Pass", Int) = 1
+
+        [Enum(UnityEngine.Rendering.CullMode)]
+        _Cull ("Culling Mode", Int) = 2  // Default: Back
+
+        [Toggle(_FLIPNORMAL_ON)]
+        _FlipNormal ("Flip Backface Normal", Int) = 1
+
+        // [HideInInspector]
+        // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
+        // _Mode ("Rendering Mode", Int) = 0
+
+        // keyword: _ALPHATEST_ON
+        [Toggle(_ALPHATEST_ON)]
+        _AlphaTest ("Alpha test", Int) = 0
+
+        _Cutoff ("Alpha Cutoff", Range (0.0, 1.0)) = 0.5
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlend ("Blend Source Factor", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlend ("Blend Destination Factor", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlendAlpha ("Blend Source Factor for Alpha", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlendAlpha ("Blend Destination Factor for Alpha", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOp ("Blend Operation", Int) = 0  // Default: Add
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOpAlpha ("Blend Operation for Alpha", Int) = 0  // Default: Add
+
+        [Enum(Off, 0, On, 1)]
+        _ZWrite ("ZWrite", Int) = 1  // Default: On
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _ZTest ("ZTest", Int) = 4  // Default: LEqual
+
+        [Enum(False, 0, True, 1)]
+        _ZClip ("ZClip", Int) = 1  // Default: True
+
+        _OffsetFactor ("Offset Factor", Range(-1.0, 1.0)) = 0
+
+        _OffsetUnits ("Offset Units", Range(-1.0, 1.0)) = 0
+
+        [ColorMask]
+        _ColorMask ("Color Mask", Int) = 15  // Default: RGBA
+
+        [Enum(Off, 0, On, 1)]
+        _AlphaToMask ("Alpha To Mask", Int) = 0  // Default: Off
+
+
+        // ------------------------------------------------------------
+        [Header(Stencil Parameters)]
+        [Space(8)]
+
+        [IntRange]
+        _StencilRef ("Stencil Reference Value", Range(0, 255)) = 0
+
+        [IntRange]
+        _StencilReadMask ("Stencil ReadMask Value", Range(0, 255)) = 255
+
+        [IntRange]
+        _StencilWriteMask ("Stencil WriteMask Value", Range(0, 255)) = 255
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _StencilComp ("Stencil Compare Function", Int) = 8  // Default: Always
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilPass ("Stencil Pass", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilFail ("Stencil Fail", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilZFail ("Stencil ZFail", Int) = 0  // Default: Keep
+    }
+
+    // Blend Mode  | RenderQueue   | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
+    // ------------|---------------|---------------------|--------|--------------|-----------------------|----------
+    // Opaque      | "Geometry"    | "Opaque"            | On     | One (1)      | Zero (0)              | x
+    // Cutout      | "AlphaTest"   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
+    // Fade        | "Transparent" | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
+    // Transparent | "Transparent" | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
+
+    SubShader
+    {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "Queue" = "Geometry"
+            // "DisableBatching" = "True"
+            // "IgnoreProjector" = "True"
+            "VRCFallback" = "StandardCutout"
+            "LTCGI" = "ALWAYS"
+        }
+
+        BlendOp [_BlendOp], [_BlendOpAlpha]
+        ZTest [_ZTest]
+        ZClip [_ZClip]
+        Offset [_OffsetFactor], [_OffsetUnits]
+        ColorMask [_ColorMask]
+        AlphaToMask [_AlphaToMask]
+
+        Stencil
+        {
+            Ref [_StencilRef]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+            Comp [_StencilComp]
+            Pass [_StencilPass]
+            Fail [_StencilFail]
+            ZFail [_StencilZFail]
+        }
+
+        CGINCLUDE
+        #pragma target 4.0
+
+        #pragma multi_compile_instancing
+        #pragma instancing_options assumeuniformscaling
+
+        #pragma only_renderers d3d9 d3d11 d3d11_9x glcore gles gles3 metal vulkan xboxone ps4 n3ds wiiu switch
+        #pragma fragmentoption ARB_precision_hint_fastest
+
+        #pragma shader_feature_local_fragment _ _FLIPNORMAL_ON
+        #pragma shader_feature_local_fragment _ _ALPHATEST_ON
+
+        // #define USE_APPDATA_NORMAL 1
+
+        #if defined(SHADER_API_D3D11_9X)
+        #    undef _FLIPNORMAL_ON
+        #endif  // defined(SHADER_API_D3D11_9X)
+        #define OPTIMIZE_BOX_PROJECTION 1
+
+        #include "UnityCG.cginc"
+        #include "UnityStandardUtils.cginc"
+
+        #if defined(OPTIMIZE_BOX_PROJECTION)
+        float3 boxProj(float3 worldRefDir, float3 worldPos, float4 probePos, float4 boxMin, float4 boxMax);
+        #    define BoxProjectedCubemapDirection boxProj
+        #endif  // defined(OPTIMIZE_BOX_PROJECTION)
+
+        #include "AutoLight.cginc"
+        #include "Lighting.cginc"
+        #include "UnityPBSLighting.cginc"
+
+        #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #    include "UnityPBSLighting.cginc"
+        #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #if defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON ) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #    include "Packages/red.sim.lightvolumes/Shaders/LightVolumes.cginc"
+        #endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON ) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #if defined(_LTCGI_ON)
+        // #    define LTCGI_AVATAR_MODE
+        #    if defined(_LIGHTING_UNITY_LAMBERT)
+        #        define LTCGI_SPECULAR_OFF
+        #    endif  // defined(_LIGHTING_UNITY_LAMBERT)
+        #    include "Packages/at.pimaker.ltcgi/Shaders/LTCGI.cginc"
+        #endif  // defined(_LTCGI_ON)
+
+
+        //! Main texture.
+        UNITY_DECLARE_TEX2D(_MainTex);
+        //! Tiling and offset values of _MainTex.
+        uniform float4 _MainTex_ST;
+        //! Emission map.
+        UNITY_DECLARE_TEX2D(_EmissionMap);
+        //! Metallic map.
+        UNITY_DECLARE_TEX2D(_MetallicGlossMap);
+        //! Normal map.
+        UNITY_DECLARE_TEX2D(_BumpMap);
+        //! Occlusion map.
+        UNITY_DECLARE_TEX2D(_OcclusionMap);
+        //! Height map.
+        UNITY_DECLARE_TEX2D(_ParallaxMap);
+
+        #if !defined(UNITY_LIGHTING_COMMON_INCLUDED)
+        //! Color of light.
+        uniform fixed4 _LightColor0;
+        #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED)
+        #if !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
+        //! Specular color.
+        uniform half3 _SpecColor;
+        #endif  // !defined(UNITY_LIGHTING_COMMON_INCLUDED) && !defined(UNITY_STANDARD_SHADOW_INCLUDED)
+
+        UNITY_INSTANCING_BUFFER_START(Props)
+        //! Color of the objects.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _Color)
+        //! Emission color.
+        UNITY_DEFINE_INSTANCED_PROP(half4, _EmissionColor)
+        //! Specular power.
+        UNITY_DEFINE_INSTANCED_PROP(half, _SpecPower)
+        //! Smoothness Factor.
+        UNITY_DEFINE_INSTANCED_PROP(half, _GlossMapScale)
+        //! Value of smoothness.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Glossiness)
+        //! Value of Metallic.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Metallic)
+        //! Normal power.
+        UNITY_DEFINE_INSTANCED_PROP(float, _BumpScale)
+        //! Occlusion Strength.
+        UNITY_DEFINE_INSTANCED_PROP(float, _OcclusionStrength)
+        //! Height Scale.
+        UNITY_DEFINE_INSTANCED_PROP(float, _Parallax)
+        #if defined(_ALPHATEST_ON)
+        //! Alpha Cutoff.
+        UNITY_DEFINE_INSTANCED_PROP(half, _Cutoff)
+        #endif  // defined(_ALPHATEST_ON)
+        UNITY_INSTANCING_BUFFER_END(Props)
+
+
+        /*!
+         * @brief Input data type for vertex shader function, vert().
+         * @see vert
+         */
+        struct appdata
+        {
+            //! Object space position of the vertex.
+            float4 vertex : POSITION;
+            // float4 tangent : TANGENT;
+        #if defined(USE_APPDATA_NORMAL)
+            //! Normal vector of the vertex.
+            float3 normal : NORMAL;
+        #endif  // defined(USE_APPDATA_NORMAL)
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! Tangent vector of the vertex.
+            float4 tangent : TANGENT;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! UV coordinate of the vertex.
+            float2 texcoord : TEXCOORD0;
+        #if defined(LIGHTMAP_ON)
+            //! Lightmap coordinate.
+            float2 texcoord1 : TEXCOORD1;
+        #endif  // defined(LIGHTMAP_ON)
+        #if defined(DYNAMICLIGHTMAP_ON)
+            //! Dynamic Lightmap coordinate.
+            float2 texcoord2 : TEXCOORD2;
+        #endif  // defined(DYNAMICLIGHTMAP_ON)
+            UNITY_VERTEX_INPUT_INSTANCE_ID
+        };
+
+
+        // typedef appdata v2g;
+        /*!
+         * @brief Output data type of vertex shader function, vert()
+         * and input data type of geometry shader function, geom().
+         * @see vert
+         * @see geom
+         */
+        struct v2g
+        {
+            //! Object space position of the vertex.
+            float4 vertex : POSITION;
+            // float4 tangent : TANGENT;
+            //! UV coordinate of the vertex.
+            float2 texcoord : TEXCOORD0;
+        #if defined(USE_APPDATA_NORMAL)
+            //! Normal vector of the vertex.
+            float3 normal : TEXCOORD1;
+        #endif  // defined(USE_APPDATA_NORMAL)
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! Tangent vector of the vertex.
+            float4 tangent : TEXCOORD2;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
+        #if defined(LIGHTMAP_ON)
+        #    if defined(DYNAMICLIGHTMAP_ON)
+            //! Lightmap and Dynamic Lightmap coordinate.
+            float4 lmap: TEXCOORD3;
+        #    else
+            //! Lightmap coordinate.
+            float2 lmap: TEXCOORD4;
+        #    endif
+        #endif  // UNITY_SHOULD_SAMPLE_SH
+            UNITY_VERTEX_INPUT_INSTANCE_ID
+        };
+
+        /*!
+         * @brief Output data type of geometry shader function, geom()
+         * and input data type of fragment shader function, frag().
+         * @see geom
+         * @see frag
+         */
+        struct g2f
+        {
+            //! Clip space position of the vertex.
+            float4 pos : SV_POSITION;
+            //! UV coordinate.
+            float2 uv : TEXCOORD0;
+            //! World space position.
+            float3 worldPos: TEXCOORD1;
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! World space tangent.
+            float3 worldTangent : TEXCOORD2;
+            //! World space Binormal.
+            float3 worldBinormal : TEXCOORD3;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            //! World space normal.
+            float3 worldNormal : TEXCOORD4;
+        #if defined(LIGHTMAP_ON)
+        #    if defined(DYNAMICLIGHTMAP_ON)
+            //! Lightmap and Dynamic Lightmap coordinate.
+            float4 lmap: TEXCOORD5;
+        #    else
+            //! Lightmap coordinate.
+            float2 lmap: TEXCOORD5;
+        #    endif
+        #elif UNITY_SHOULD_SAMPLE_SH
+            //! Ambient light color.
+            half3 ambient: TEXCOORD5;
+        #endif  // UNITY_SHOULD_SAMPLE_SH
+            //! Members abourt ligting coordinates, _LightCoord and _ShadowCoord.
+            UNITY_LIGHTING_COORDS(6, 7)
+            //! Member abourt fog coordinates, _fogCoord.
+            UNITY_FOG_COORDS(8)
+            //! Instance ID for single pass instanced rendering, instanceID.
+            UNITY_VERTEX_INPUT_INSTANCE_ID
+            //! Stereo target eye index for single pass instanced rendering, stereoTargetEyeIndex.
+            UNITY_VERTEX_OUTPUT_STEREO
+        };
+
+
+        #if defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+        typedef fixed face_t;
+        #    define FACE_SEMANTICS VFACE
+        #else
+        typedef bool face_t;
+        #    define FACE_SEMANTICS SV_IsFrontFace
+        #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+
+
+        float2 calcParallaxOffset(float2 uv, float3 tangentViewDir);
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, float2 uv, half atten, float4 lmap, half3 ambient);
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient);
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient);
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient);
+        UnityGI getGI(float3 worldPos, half atten);
+        UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient);
+        half3 calcLightVolumeEmission(half3 albedo, float3 worldPos, float3 worldNormal, float3 worldViewDir, half glossiness, half metallic, half occlusion);
+        bool isFacing(face_t face);
+
+
+        /*!
+         * @brief Vertex shader function
+         * @param [in] v  Input data
+         * @return Vertex data for geometry shader function.
+         */
+        v2g vert(appdata v)
+        {
+            v2g o;
+            UNITY_INITIALIZE_OUTPUT(v2g, o);
+
+            UNITY_SETUP_INSTANCE_ID(v);
+            UNITY_TRANSFER_INSTANCE_ID(v, o);
+            UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+            o.vertex = v.vertex;
+        #if defined(USE_APPDATA_NORMAL)
+            o.normal = v.normal;
+        #endif  // defined(USE_APPDATA_NORMAL)
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            o.tangent = v.tangent;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
+            o.texcoord = v.texcoord;
+            #if defined(LIGHTMAP_ON)
+            o.lmap.xy = v.texcoord1.xy * unity_LightmapST.xy + unity_LightmapST.zw;
+            #    if defined(DYNAMICLIGHTMAP_ON)
+            o.lmap.zw = v.texcoord2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
+            #    endif  // defined(DYNAMICLIGHTMAP_ON)
+            #endif  // defined(LIGHTMAP_ON)
+
+            return o;
+        }
+
+        /*!
+         * @brief Geometry shader function.
+         * @param [in] i  Input data from vertex shader.
+         * @param [in,out] outStream  Output stream for fragment shader function.
+         */
+        #if !defined(UNITY_PASS_FORWARDADD)
+        [maxvertexcount(3)]
+        #endif  // !defined(UNITY_PASS_FORWARDADD)
+        void geom(triangle v2g gi[3], inout TriangleStream<g2f> outStream)
+        {
+            // Recalc normal.
+        #if !defined(USE_APPDATA_NORMAL)
+            float3 normal = normalize(cross(gi[1].vertex.xyz - gi[0].vertex.xyz, gi[2].vertex.xyz - gi[0].vertex.xyz));
+        #endif  // !defined(USE_APPDATA_NORMAL)
+
+            UNITY_UNROLL
+            for (int i = 0; i < 3; i++) {
+                const v2g v = gi[i];
+
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(v);
+
+                g2f o;
+                UNITY_INITIALIZE_OUTPUT(g2f, o);
+
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                o.pos = UnityObjectToClipPos(v.vertex);
+                o.uv = v.texcoord;
+                // o.uv = TRANSFORM_TEX(v.uv, _MainTex);
+
+                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+        #if defined(USE_APPDATA_NORMAL)
+                o.worldNormal = UnityObjectToWorldNormal(v.normal);
+        #else
+                o.worldNormal = UnityObjectToWorldNormal(normal);
+        #endif  // defined(USE_APPDATA_NORMAL)
+        #if defined(_NORMALMAP) || defined(_PARALLAXMAP)
+                o.worldTangent = UnityObjectToWorldDir(v.tangent.xyz);
+                o.worldBinormal = cross(o.worldNormal, o.worldTangent) * v.tangent.w * unity_WorldTransformParams.w;
+        #endif  // defined(_NORMALMAP) || defined(_PARALLAXMAP)
+
+        #if defined(LIGHTMAP_ON)
+                o.lmap = v.lmap;
+        #elif UNITY_SHOULD_SAMPLE_SH
+        #    if defined(VERTEXLIGHT_ON)
+                // Approximated illumination from non-important point lights
+                o.ambient.rgb = Shade4PointLights(
+                    unity_4LightPosX0,
+                    unity_4LightPosY0,
+                    unity_4LightPosZ0,
+                    unity_LightColor[0].rgb,
+                    unity_LightColor[1].rgb,
+                    unity_LightColor[2].rgb,
+                    unity_LightColor[3].rgb,
+                    unity_4LightAtten0,
+                    o.worldPos,
+                    o.worldNormal);
+        #    endif  // defined(VERTEXLIGHT_ON)
+                o.ambient.rgb = ShadeSHPerVertex(o.worldNormal, o.ambient.rgb);
+        #endif  // defined(LIGHTMAP_ON)
+
+                UNITY_TRANSFER_LIGHTING(o, v.lmap.xy);
+                UNITY_TRANSFER_FOG(o, o.vertex);
+
+                outStream.Append(o);
+            }
+
+            outStream.RestartStrip();
+        }
+
+
+        #if defined(_FLIPNORMAL_ON)
+        /*!
+         * @brief Fragment shader function.
+         * @param [in] fi  Input data from vertex shader.
+         * @param [in] facing  Facing parameter.
+         * @return Color of texel at (i.uv.x, i.uv.y).
+         */
+        half4 frag(g2f fi, face_t facing : FACE_SEMANTICS) : SV_Target
+        #else
+        /*!
+         * @brief Fragment shader function.
+         * @param [in] fi  Input data from vertex shader.
+         * @return Color of texel at (i.uv.x, i.uv.y).
+         */
+        half4 frag(g2f fi) : SV_Target
+        #endif  // defined(_FLIPNORMAL_ON)
+        {
+            UNITY_SETUP_INSTANCE_ID(fi);
+            UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+        #if defined(_PARALLAXMAP)
+            const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(fi.worldPos));
+            const float3 tangentViewDir = float3(
+                dot(fi.worldTangent, worldViewDir),
+                dot(fi.worldBinormal, worldViewDir),
+                dot(fi.worldNormal, worldViewDir));
+            const float2 uv = fi.uv + calcParallaxOffset(fi.uv, tangentViewDir);
+        #else
+            const float2 uv = fi.uv;
+        #endif  // defined(_PARALLAXMAP)
+
+        #if defined(_NORMALMAP)
+            const float3 tangentNormal = UnpackScaleNormal(
+                UNITY_SAMPLE_TEX2D(_BumpMap, uv),
+                UNITY_ACCESS_INSTANCED_PROP(Props, _BumpScale));
+            float3 worldNormal = normalize(fi.worldTangent * tangentNormal.x + fi.worldBinormal * tangentNormal.y + fi.worldNormal * tangentNormal.z);
+        #else
+            float3 worldNormal = fi.worldNormal;
+        #endif  // defined(_NORMALMAP)
+
+        #if defined(_FLIPNORMAL_ON)
+            worldNormal = isFacing(facing) ? worldNormal : -worldNormal;
+        #endif  // defined(_FLIPNORMAL_ON)
+
+            const half4 mainCol = UNITY_SAMPLE_TEX2D(_MainTex, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _Color);
+        #if defined(_ALPHATEST_ON)
+            clip(mainCol.a - _Cutoff);
+        #endif  // defined(_ALPHATEST_ON)
+
+        #if defined(LIGHTMAP_ON)
+        #    if defined(DYNAMICLIGHTMAP_ON)
+            const float4 lmap = fi.lmap;
+        #    else
+            const float4 lmap = float4(fi.lmap, 0.0, 0.0);
+        #    endif  // defined(DYNAMICLIGHTMAP_ON)
+            const half3 ambient = half3(0.0, 0.0, 0.0);
+        #elif UNITY_SHOULD_SAMPLE_SH
+            const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
+            const half3 ambient = fi.ambient;
+        #else
+            const float4 lmap = float4(0.0, 0.0, 0.0, 0.0);
+            const half3 ambient = half3(0.0, 0.0, 0.0);
+        #endif  // defined(LIGHTMAP_ON)
+
+            UNITY_LIGHT_ATTENUATION(atten, fi, fi.worldPos);
+
+            half4 color = calcLighting(mainCol, fi.worldPos, worldNormal, uv, atten, lmap, ambient);
+
+            UNITY_APPLY_FOG(fi.fogCoord, color);
+
+            return color;
+        }
+
+
+        /*!
+         * @brief Calculate parallax UV offset.
+         *
+         * Same as ParallaxOffset1Step() in UnityStandardUtils.cginc.
+         *
+         * @param [in] uv  UV coordinate for Height Map.
+         * @param [in] tangentViewDir  View direction in tangent space.
+         */
+        float2 calcParallaxOffset(float2 uv, float3 tangentViewDir)
+        {
+            const float height = UNITY_ACCESS_INSTANCED_PROP(Props, _Parallax);
+            const float h = UNITY_SAMPLE_TEX2D(_ParallaxMap, uv).g * height - height * 0.5;
+            const half3 v = normalize(tangentViewDir);
+            return h * (v.xy / (v.z + 0.42));
+        }
+
+
+        /*!
+         * Calculate lighting.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] uv  UV coordinate for _EmissionMap and _MetallicGlossMapa.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, float2 uv, half atten, float4 lmap, half3 ambient)
+        {
+        #if defined(_EMISSION)
+            const half3 emission = UNITY_SAMPLE_TEX2D(_EmissionMap, uv) * UNITY_ACCESS_INSTANCED_PROP(Props, _EmissionColor);
+        #else
+            const half3 emission = half3(0.0, 0.0, 0.0);
+        #endif  // defined(_EMISSION)
+
+        #if defined(_LIGHTING_UNITY_STANDARD)
+        #    if defined(_METALLICGLOSSMAP)
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half metallic = UNITY_SAMPLE_TEX2D(_MetallicGlossMap, uv).r;
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half2 mg = UNITY_SAMPLE_TEX2D(_MetallicGlossMap, uv).ra;
+            const half metallic = mg.r;
+            const half glossiness = mg.g * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+        #    else
+            const half metallic = UNITY_ACCESS_INSTANCED_PROP(Props, _Metallic);
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half glossiness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+        #    endif  // defined(_METALLICGLOSSMAP)
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG)
+            const half metallic = 0.0;
+        #    if defined(_SPECGLOSSMAP)
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half3 sg = UNITY_SAMPLE_TEX2D(_SpecGlossMap, uv).rgb;
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half4 sg = UNITY_SAMPLE_TEX2D(_SpecGlossMap, uv);
+            const half glossiness = sg.a * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            _SpecColor.rgb = sg.rgb;
+        #    else
+        #        if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+            const half glossiness = alpha * UNITY_ACCESS_INSTANCED_PROP(Props, _GlossMapScale);
+        #        else
+            const half glossiness = UNITY_ACCESS_INSTANCED_PROP(Props, _Glossiness);
+        #        endif  // defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+        #    endif  // defined(_SPECGLOSSMAP)
+        #else
+            const half metallic = 0.0;
+            const half glossiness = 0.0;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD)
+
+        #if defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            const half occlusion = LerpOneTo(UNITY_SAMPLE_TEX2D(_OcclusionMap, uv).g, UNITY_ACCESS_INSTANCED_PROP(Props, _OcclusionStrength));
+        #else
+            const half occlusion = 1.0;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+
+            return calcLighting(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
+        }
+
+
+        /*!
+         * Calculate lighting.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] emission  Emission color.
+         * @param [in] glossiness  Glossiness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLighting(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient)
+        {
+        #if defined(_LIGHTING_CUSTOM)
+            return calcLightingCustom(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
+        #elif defined(_LIGHTING_UNITY_LAMBERT) \
+            || defined(_LIGHTING_UNITY_BLINN_PHONG) \
+            || defined(_LIGHTING_UNITY_STANDARD) \
+            || defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+            return calcLightingUnity(color, worldPos, worldNormal, emission, glossiness, metallic, occlusion, atten, lmap, ambient);
+        #else
+            // assume _LIGHTING_UNLIT
+            color.rgb += emission;
+            return color;
+        #endif  // defined(_LIGHTING_CUSTOM)
+        }
+
+
+        /*!
+         * Calculate lighting with lighting method on Unity Surface Shaders.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] emission  Emission color.
+         * @param [in] glossiness  Glossiness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLightingUnity(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient)
+        {
+            // Uniform variable requirements:
+            //
+            // Variant                             | `_Glossiness` | `_Metallic` | `_SpecColor` | `_SpecPower`
+            // ------------------------------------|---------------|-------------|--------------|-------------
+            // `_LIGHTING_UNITY_LAMBERT`           |               |             |              |
+            // `_LIGHTING_UNITY_BLINN_PHONG`       | o             |             | o            | o
+            // `_LIGHTING_UNITY_STANDARD`          | o             | o           |              |
+            // `_LIGHTING_UNITY_STANDARD_SPECULAR` | o             |             | o            |
+
+        #if defined(_LIGHTING_UNITY_STANDARD)
+        #    define LightingUnity_GI(so, giInput, gi) LightingStandard_GI(so, giInput, gi)
+        #    define LightingUnity(so, worldViewDir, gi) LightingStandard(so, worldViewDir, gi)
+            SurfaceOutputStandard so;
+            UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandard, so);
+            so.Albedo = color.rgb;
+            so.Normal = worldNormal;
+            so.Emission = emission;
+            so.Metallic = metallic;
+            so.Smoothness = glossiness;
+            so.Occlusion = occlusion;
+            so.Alpha = color.a;
+        #elif defined(_LIGHTING_UNITY_STANDARD_SPECULAR)
+        #    define LightingUnity_GI(so, giInput, gi) LightingStandardSpecular_GI(so, giInput, gi)
+        #    define LightingUnity(so, worldViewDir, gi) LightingStandardSpecular(so, worldViewDir, gi)
+            SurfaceOutputStandardSpecular so;
+            UNITY_INITIALIZE_OUTPUT(SurfaceOutputStandardSpecular, so);
+            so.Albedo = color.rgb;
+            so.Specular = _SpecColor.rgb;
+            so.Normal = worldNormal;
+            so.Emission = emission;
+            so.Smoothness = glossiness;
+            so.Occlusion = occlusion;
+            so.Alpha = color.a;
+        #else
+            SurfaceOutput so;
+            UNITY_INITIALIZE_OUTPUT(SurfaceOutput, so);
+            so.Albedo = color.rgb;
+            so.Normal = worldNormal;
+            so.Emission = emission;
+        #    if defined(_LIGHTING_UNITY_BLINN_PHONG)
+        #        define LightingUnity_GI(so, giInput, gi) LightingBlinnPhong_GI(so, giInput, gi)
+        #        define LightingUnity(so, worldViewDir, gi) LightingBlinnPhong(so, worldViewDir, gi)
+            so.Specular = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower) / 128.0;
+            so.Gloss = glossiness;
+            // NOTE: _SpecColor is used in UnityBlinnPhongLight() used in LightingBlinnPhong().
+        #    else
+        #        define LightingUnity_GI(so, giInput, gi) LightingLambert_GI(so, giInput, gi)
+        #        define LightingUnity(so, worldViewDir, gi) LightingLambert(so, gi)
+        #    endif  // defined(_LIGHTING_UNITY_BLINN_PHONG)
+            so.Alpha = color.a;
+        #endif  // defined(_LIGHTING_UNITY_STANDARD)
+
+            UnityGI gi = getGI(worldPos, atten);
+            const float3 worldViewDir = normalize(UnityWorldSpaceViewDir(worldPos));
+        #if defined(UNITY_PASS_FORWARDBASE)
+        #    if !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
+            lmap = float4(0.0, 0.0, 0.0, 0.0);
+        #    endif  // !defined(LIGHTMAP_ON) && !defined(DYNAMICLIGHTMAP_ON)
+            UnityGIInput giInput = getGIInput(gi.light, worldPos, worldNormal, worldViewDir, atten, lmap, ambient);
+            LightingUnity_GI(so, giInput, /* inout */ gi);
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
+
+        #if UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON)
+        #    if defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+            if (_UdonLightVolumeEnabled && _UdonLightVolumeCount != 0) {
+                gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
+                so.Emission += calcLightVolumeEmission(color.rgb, worldPos, worldNormal, worldViewDir, glossiness, metallic, occlusion);
+            }
+        #    endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #endif  // UNITY_SHOULD_SAMPLE_SH && !defined(LIGHTMAP_ON)
+
+        #if defined(UNITY_PASS_FORWARDBASE) && defined(_LTCGI_ON)
+            float3 ltcgiSpecular = float3(0.0, 0.0, 0.0);
+            float3 ltcgiDiffuse = float3(0.0, 0.0, 0.0);;
+            LTCGI_Contribution(
+               worldPos,
+               worldNormal,
+               worldViewDir,
+               1.0 - glossiness,
+               float2(0.0, 0.0),
+               /* inout */ ltcgiDiffuse,
+               /* inout */ ltcgiSpecular);
+        #    if defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG)
+            so.Emission += color.rgb * ltcgiDiffuse + ltcgiSpecular;
+        #    else
+            so.Emission += color.rgb * ltcgiDiffuse;
+        #    endif  // defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG)
+        #endif  // defined(UNITY_PASS_FORWARDBASE) && defined(_LTCGI_ON)
+
+            half4 col = LightingUnity(so, worldViewDir, gi);
+        #if defined(UNITY_PASS_FORWARDBASE)
+            col.rgb += so.Emission;
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
+
+            return col;
+
+        #undef LightingUnity_GI
+        #undef LightingUnity
+        }
+
+
+        /*!
+         * Calculate lighting with custom method.
+         * @param [in] color  Base color.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] emission  Emission color.
+         * @param [in] glossiness  Glossiness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Lighting applied color.
+         */
+        half4 calcLightingCustom(half4 color, float3 worldPos, float3 worldNormal, half3 emission, half glossiness, half metallic, half occlusion, half atten, float4 lmap, half3 ambient)
+        {
+            const float3 worldViewDir = normalize(_WorldSpaceCameraPos - worldPos);
+        #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+            const float3 worldLightDir = UnityWorldSpaceLightDir(worldPos);
+        #else
+            const float3 worldLightDir = normalize(UnityWorldSpaceLightDir(worldPos));
+        #endif  // defined(USING_LIGHT_MULTI_COMPILE) || defined(USING_DIRECTIONAL_LIGHT)
+            const fixed3 lightCol = _LightColor0.rgb * atten;
+
+            // Lambertian reflectance.
+            const float nDotL = dot(worldNormal, worldLightDir);
+            const half3 diffuse = lightCol * pow(nDotL * 0.5 + 0.5, 2.0);  // will be mul instruction.
+
+            // Specular reflection.
+            // const float3 rDotV = dot(normalize(worldLightDir + worldViewDir), worldNormal);  // Half-Vector
+            const float3 rDotV = dot(reflect(-worldLightDir, worldNormal), worldViewDir);
+            const float specPower = UNITY_ACCESS_INSTANCED_PROP(Props, _SpecPower);
+            const half3 specular = pow(max(0.0, rDotV), specPower) * _SpecColor.rgb * lightCol;
+
+            // Ambient color.
+        #if UNITY_SHOULD_SAMPLE_SH
+            ambient = ShadeSHPerPixel(worldNormal, ambient, worldPos);
+        #endif  // UNITY_SHOULD_SAMPLE_SH
+
+            const half4 outColor = half4((diffuse + ambient) * color.rgb + specular + emission, color.a);
+
+            return outColor;
+        }
+
+
+        /*!
+         * @brief Get initial instance of UnityGI.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] atten  Light attenuation.
+         * @return Initial instance of UnityGI.
+         */
+        UnityGI getGI(float3 worldPos, half atten)
+        {
+            UnityGI gi;
+            UNITY_INITIALIZE_OUTPUT(UnityGI, gi);
+        #if defined(UNITY_PASS_FORWARDBASE)
+            gi.light.color = _LightColor0.rgb;
+        #else
+            gi.light.color = _LightColor0.rgb * atten;
+        #endif  // defined(UNITY_PASS_FORWARDBASE)
+        #if defined(USING_LIGHT_MULTI_COMPILE) && defined(USING_DIRECTIONAL_LIGHT)
+            gi.light.dir = UnityWorldSpaceLightDir(worldPos);
+        #else
+            gi.light.dir = normalize(UnityWorldSpaceLightDir(worldPos));
+        #endif  // defined(USING_LIGHT_MULTI_COMPILE) || defined(USING_DIRECTIONAL_LIGHT)
+            // gi.indirect.diffuse = half3(0.0, 0.0, 0.0);
+            // gi.indirect.specular = half3(0.0, 0.0, 0.0);
+
+            return gi;
+        }
+
+
+        /*!
+         * @brief Get initial instance of UnityGIInput.
+         * @param [in] light  The lighting parameter which contains color and direction of the light.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] worldViewDir  View direction in world space.
+         * @param [in] atten  Light attenuation.
+         * @param [in] lmap  Light map parameters.
+         * @param [in] ambient  Ambient light.
+         * @return Initial instance of UnityGIInput.
+         */
+        UnityGIInput getGIInput(UnityLight light, float3 worldPos, float3 worldNormal, float3 worldViewDir, half atten, float4 lmap, half3 ambient)
+        {
+            UnityGIInput giInput;
+            UNITY_INITIALIZE_OUTPUT(UnityGIInput, giInput);
+            giInput.light = light;
+            giInput.worldPos = worldPos;
+            giInput.worldViewDir = worldViewDir;
+            giInput.atten = atten;
+
+        #if defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
+            giInput.lightmapUV = lmap;
+        #else
+            giInput.lightmapUV = float4(0.0, 0.0, 0.0, 0.0);
+        #endif  // defined(LIGHTMAP_ON) || defined(DYNAMICLIGHTMAP_ON)
+
+        #if UNITY_SHOULD_SAMPLE_SH
+            giInput.ambient = ambient;
+        #else
+            giInput.ambient = half3(0.0, 0.0, 0.0);
+        #endif  // UNITY_SHOULD_SAMPLE_SH
+
+        #if !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
+            giInput.probeHDR[0] = unity_SpecCube0_HDR;
+            giInput.probeHDR[1] = unity_SpecCube1_HDR;
+        #    if defined(UNITY_SPECCUBE_BLENDING) || defined(UNITY_SPECCUBE_BOX_PROJECTION)
+            giInput.boxMin[0] = unity_SpecCube0_BoxMin;
+        #    endif  // defined(UNITY_SPECCUBE_BLENDING) || defined(UNITY_SPECCUBE_BOX_PROJECTION)
+        #    if defined(UNITY_SPECCUBE_BOX_PROJECTION)
+            giInput.boxMax[0] = unity_SpecCube0_BoxMax;
+            giInput.probePosition[0] = unity_SpecCube0_ProbePosition;
+            giInput.boxMax[1] = unity_SpecCube1_BoxMax;
+            giInput.boxMin[1] = unity_SpecCube1_BoxMin;
+            giInput.probePosition[1] = unity_SpecCube1_ProbePosition;
+        #    endif  // defined(UNITY_SPECCUBE_BOX_PROJECTION)
+        #endif  // !defined(_LIGHTING_UNITY_LAMBERT) && !defined(_LIGHTING_UNITY_BLINN_PHONG)
+
+            return giInput;
+        }
+
+
+        /*!
+         * @brief Calculate ambient of VRC Light Volumes.
+         * @param [in] albedo  Albedo.
+         * @param [in] worldPos  World coordinate.
+         * @param [in] worldNormal  Normal in world space.
+         * @param [in] worldViewDir  View direction in world space.
+         * @param [in] glossiness  Smoothness.
+         * @param [in] metallic  Metallic.
+         * @param [in] occlusion  Occlusion.
+         * @return Ambient color.
+         */
+        half3 calcLightVolumeEmission(half3 albedo, float3 worldPos, float3 worldNormal, float3 worldViewDir, half glossiness, half metallic, half occlusion)
+        {
+        #if defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+            half3 emission;
+
+            float3 L0, L1r, L1g, L1b;
+        #    if defined(_VRCLIGHTVOLUMES_ADDITIVE)
+            LightVolumeAdditiveSH(worldPos, /* out */ L0, /* out */ L1r, /* out */ L1g, /* out */ L1b);
+        #    elif defined(_VRCLIGHTVOLUMES_ON)
+            LightVolumeSH(worldPos, /* out */ L0, /* out */ L1r, /* out */ L1g, /* out */ L1b);
+        #    else
+            L0 = float3(unity_SHAr.w, unity_SHAg.w, unity_SHAb.w);
+            L1r = unity_SHAr.xyz;
+            L1g = unity_SHAg.xyz;
+            L1b = unity_SHAb.xyz;
+        #    endif  // defined(_VRCLIGHTVOLUMES_ADDITIVE)
+
+            const float3 lvAmbient = LightVolumeEvaluate(worldNormal, L0, L1r, L1g, L1b) * albedo;
+            float3 ambientAndSpecular = lvAmbient - lvAmbient * metallic;
+
+        #    if (defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && (defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG))
+        #        if defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+            ambientAndSpecular += LightVolumeSpecularDominant(albedo, glossiness, metallic, worldNormal, worldViewDir, L0, L1r, L1g, L1b) * occlusion;
+        #        else
+            ambientAndSpecular += LightVolumeSpecular(albedo, glossiness, metallic, worldNormal, worldViewDir, L0, L1r, L1g, L1b) * occlusion;
+        #        endif  // defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        #    endif  // (defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)) && (defined(_LIGHTING_UNITY_STANDARD) || defined(_LIGHTING_UNITY_STANDARD_SPECULAR) || defined(_LIGHTING_UNITY_BLINN_PHONG))
+
+            return ambientAndSpecular * occlusion;
+        #else
+            return half3(0.0, 0.0, 0.0);
+        #endif  // defined(_VRCLIGHTVOLUMES_ON) || defined(_VRCLIGHTVOLUMES_ADDITIVE_ONLY) || defined(_VRCLIGHTVOLUMESSPECULAR_ON) || defined(_VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR)
+        }
+
+
+        /*!
+         * @brief Identify whether surface is facing the camera or facing away from the camera.
+         * @param [in] facing  Facing variable (fixed or bool).
+         * @return True if surface facing the camera, otherwise false.
+         */
+        bool isFacing(face_t facing)
+        {
+        #if defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+            return facing >= 0.0;
+        #else
+            return facing;
+        #endif  // defined(SHADER_API_GLCORE) || defined(SHADER_API_GLES) || defined(SHADER_API_D3D9)
+        }
+
+
+        /*!
+         * @brief Obtain reflection direction considering box projection.
+         *
+         * This function is more efficient than BoxProjectedCubemapDirection() in UnityStandardUtils.cginc.
+         *
+         * @param [in] worldRefDir  Refrection dir (must be normalized).
+         * @param [in] worldPos  World coordinate.
+         * @param [in] probePos  Position of Refrection probe.
+         * @param [in] boxMin  Position of Refrection probe.
+         * @param [in] boxMax  Position of Refrection probe.
+         * @return Refrection direction considering box projection.
+         */
+        float3 boxProj(float3 worldRefDir, float3 worldPos, float4 probePos, float4 boxMin, float4 boxMax)
+        {
+            // UNITY_SPECCUBE_BOX_PROJECTION is defined if
+            // "Reflection Probes Box Projection" of GraphicsSettings is enabled.
+        #if defined(UNITY_SPECCUBE_BOX_PROJECTION)
+            // probePos.w == 1.0 if Box Projection is enabled.
+            if (probePos.w > 0.0) {
+                const float3 magnitudes = ((worldRefDir > 0.0 ? boxMax.xyz : boxMin.xyz) - worldPos) / worldRefDir;
+                return worldRefDir * min(magnitudes.x, min(magnitudes.y, magnitudes.z)) + (worldPos - probePos);
+            } else {
+                return worldRefDir;
+            }
+        #else
+            return worldRefDir;
+        #endif  // defined(UNITY_SPECCUBE_BOX_PROJECTION)
+        }
+        ENDCG
+
+
+        Pass
+        {
+            Name "FORWARD_BASE"
+            Tags
+            {
+                "LightMode" = "ForwardBase"
+            }
+
+            Cull [_Cull]
+            Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
+            ZWrite [_ZWrite]
+
+            CGPROGRAM
+            #pragma multi_compile_fwdbase
+            #pragma multi_compile_fog
+
+            #pragma shader_feature_local _ _NORMALMAP
+            #pragma shader_feature_local _ _PARALLAXMAP
+            #pragma shader_feature_local_fragment _ _EMISSION
+            #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
+            #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
+            #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
+            #pragma shader_feature_local_fragment _VRCLIGHTVOLUMES_OFF _VRCLIGHTVOLUMES_ON _VRCLIGHTVOLUMES_ADDITIVE_ONLY
+            #pragma shader_feature_local_fragment _VRCLIGHTVOLUMESSPECULAR_OFF _VRCLIGHTVOLUMESSPECULAR_ON _VRCLIGHTVOLUMESSPECULAR_DOMINANT_DIR
+            #pragma shader_feature_local_fragment _ _LTCGI_ON
+
+            #pragma vertex vert
+            #pragma geometry geom
+            #pragma fragment frag
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "FORWARD_ADD"
+            Tags
+            {
+                "LightMode" = "ForwardAdd"
+            }
+
+            Cull [_Cull]
+            Blend [_SrcBlend] One, [_SrcBlendAlpha] One
+            ZWrite Off
+
+            CGPROGRAM
+            // #pragma multi_compile_fwdadd
+            #pragma multi_compile_fwdadd_fullshadows
+            #pragma multi_compile_fog
+
+            #pragma shader_feature_local _ _FORWARDADD_OFF
+            #pragma shader_feature_local _ _NORMALMAP
+            #pragma shader_feature_local _ _PARALLAXMAP
+            #pragma shader_feature_local_fragment _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
+            #pragma shader_feature_local_fragment _ _METALLICGLOSSMAP
+            #pragma shader_feature_local_fragment _ _SPECGLOSSMAP
+            #pragma shader_feature_local_fragment _LIGHTING_UNITY_LAMBERT _LIGHTING_UNITY_BLINN_PHONG _LIGHTING_UNITY_STANDARD _LIGHTING_UNITY_STANDARD_SPECULAR _LIGHTING_UNLIT _LIGHTING_CUSTOM
+
+            #pragma vertex vertForwardAdd
+            #pragma geometry geomForwardAdd
+            #pragma fragment fragForwardAdd
+
+            #if defined(_FORWARDADD_OFF) || defined(_LIGHTING_UNLIT)
+            /*!
+             * @brief Vertex shader function for ForwardAdd pass.
+             *
+             * This function outputs NaN vertice to skip fragment shader.
+             *
+             * @param [in] v  Input data.
+             * @return Interpolation source data for fragment shader function, fragForwardAdd().
+             * @see fragForwardAdd
+             */
+            float4 vertForwardAdd() : SV_POSITION
+            {
+                return asfloat(0x7fc00000).xxxx;  // qNaN
+            }
+
+
+            /*!
+             * @brief Geometry shader function.
+             * @param [in] i  Input data from vertex shader.
+             * @param [in,out] outStream  Output stream for fragment shader function.
+             */
+            [maxvertexcount(3)]
+            void geomForwardAdd(triangle v2g gi[3], inout TriangleStream<g2f> outStream)
+            {
+                // Do nothing
+            }
+
+            /*!
+             * @brief Fragment shader function for ForwardAdd pass.
+             *
+             * This function will not be execute because vertForwardAdd outputs NaN vertices,
+             * and the vertices will be removed by view frustum culling.
+             *
+             * @param [in] fi  Input data from vertex shader.
+             * @return (0.0, 0.0, 0.0, 0.0).
+             */
+            half4 fragForwardAdd() : SV_Target
+            {
+                return half4(0.0, 0.0, 0.0, 0.0);
+            }
+            #else
+
+            /*!
+             * @brief Vertex shader function for ForwardAdd pass.
+             * @param [in] v  Input data.
+             * @return Interpolation source data for fragment shader function, fragForwardAdd().
+             * @see fragForwardAdd
+             */
+            v2g vertForwardAdd(appdata v)
+            {
+                return vert(v);
+            }
+
+            /*!
+             * @brief Geometry shader function for ForwardAdd pass.
+             * @param [in] i  Input data from vertex shader.
+             * @param [in,out] outStream  Output stream for fragment shader function.
+             */
+            [maxvertexcount(3)]
+            void geomForwardAdd(triangle v2g gi[3], inout TriangleStream<g2f> outStream)
+            {
+                geom(gi, /* inout */ outStream);
+            }
+
+
+            #    if defined(_FLIPNORMAL_ON)
+            /*!
+            * @brief Fragment shader function.
+            * @param [in] fi  Input data from vertex shader.
+            * @param [in] facing  Facing parameter.
+            * @return Color of texel.
+            */
+            half4 fragForwardAdd(g2f fi, face_t facing : FACE_SEMANTICS) : SV_Target
+            {
+                return frag(fi, facing);
+            }
+            #    else
+            /*!
+            * @brief Fragment shader function.
+            * @param [in] fi  Input data from vertex shader.
+            * @return Color of texel.
+            */
+            half4 fragForwardAdd(g2f fi) : SV_Target
+            {
+                return frag(fi);
+            }
+            #    endif  // defined(_FLIPNORMAL_ON)
+            #endif  // defined(_FORWARDADD_OFF) || defined(_LIGHTING_UNLIT)
+            ENDCG
+        }
+
+        Pass
+        {
+            Name "SHADOW_CASTER"
+            Tags
+            {
+                "LightMode" = "ShadowCaster"
+            }
+
+            Cull Back
+            Blend Off
+            ZWrite On
+
+            CGPROGRAM
+            #pragma multi_compile_shadowcaster
+
+            #pragma vertex vertShadowCaster
+            #pragma geometry geomShadowCaster
+            #pragma fragment fragShadowCaster
+
+            // #define USE_APPDATA_NORMAL 1
+
+
+            /*!
+             * @brief Input data type for vertex shader function, vertShadowCaster().
+             * @see vertShadowCaster
+             */
+            struct appdata_shadowcaster
+            {
+                //! Object space position of the vertex.
+                float4 vertex : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            /*!
+             * @brief Output data type of vertex shader function, vertShadowCaster()
+             * and input data type of geometry shader function, geomShadowCaster().
+             * @see vertShadowCaster
+             * @see geomShadowCaster
+             */
+            struct v2g_shadowcaster
+            {
+                //! Object space position of the vertex.
+                float4 vertex : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            /*!
+             * @brief Output data type of geometry shader function, geomShadowCaster()
+             * and input data type of fragment shader function, fragShadowCaster().
+             * @see geomShadowCaster
+             * @see fragShadowCaster
+             */
+            struct g2f_shadowcaster
+            {
+                V2F_SHADOW_CASTER;
+            //     float4 pos : SV_POSITION;
+            // #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+            //     // World space light vector.
+            //     float3 vec : TEXCOORD0;
+            // #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+
+            /*!
+             * @brief Vertex shader function for ShadowCaster Pass.
+             * @param [in] v  Input data
+             * @return Output for fragment shader.
+             */
+            v2g_shadowcaster vertShadowCaster(appdata_shadowcaster v)
+            {
+                v2g_shadowcaster o;
+                o.vertex = v.vertex;
+
+                return o;
+            }
+
+            /*!
+            * @brief Geometry shader function.
+            * @param [in] i  Input data from vertex shader.
+            * @param [in,out] outStream  Output stream for fragment shader function.
+            */
+            [maxvertexcount(3)]
+            void geomShadowCaster(triangle v2g_shadowcaster gi[3], inout TriangleStream<g2f_shadowcaster> outStream)
+            {
+                // Recalc normal.
+            #if !defined(USE_APPDATA_NORMAL)
+                const float3 normal = normalize(cross(gi[1].vertex.xyz - gi[0].vertex.xyz, gi[2].vertex.xyz - gi[0].vertex.xyz));
+            #endif  // !defined(USE_APPDATA_NORMAL)
+
+                UNITY_UNROLL
+                for (int i = 0; i < 3; i++) {
+                    const v2g_shadowcaster v = gi[i];
+
+                    UNITY_SETUP_INSTANCE_ID(v);
+                    UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(v);
+
+                    g2f_shadowcaster o;
+                    UNITY_INITIALIZE_OUTPUT(g2f_shadowcaster, o);
+
+                    UNITY_TRANSFER_INSTANCE_ID(v, o);
+                    UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+            #if defined(USE_APPDATA_NORMAL)
+                    const float3 normal = v.normal;
+            #endif  // defined(USE_APPDATA_NORMAL)
+
+                    //
+                    // TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
+                    //
+            #if defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+                    o.vec = mul(unity_ObjectToWorld, v.vertex).xyz - _LightPositionRange.xyz;
+                    o.pos = UnityObjectToClipPos(v.vertex);
+            #else
+                    o.pos = UnityClipSpaceShadowCasterPos(v.vertex, normal);
+                    o.pos = UnityApplyLinearShadowBias(o.pos);
+            #endif  // defined(SHADOWS_CUBE) && !defined(SHADOWS_CUBE_IN_DEPTH_TEX)
+
+                    UNITY_TRANSFER_FOG(o, o.vertex);
+                    outStream.Append(o);
+                }
+
+                outStream.RestartStrip();
+            }
+
+            /*!
+             * @brief Fragment shader function for ShadowCaster pass.
+             * @param [in] fi  Input data from vertex shader.
+             * @return Color of texel.
+             */
+            fixed4 fragShadowCaster(g2f_shadowcaster fi) : SV_Target
+            {
+                UNITY_SETUP_INSTANCE_ID(fi);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+                SHADOW_CASTER_FRAGMENT(fi)
+            }
+            ENDCG
+        }
+    }
+
+    FallBack "Diffuse"
+    // Fallback "Transparent/Cutout/Diffuse"
+    // Fallback "Transparent/Diffuse"
+    // CustomEditor "#SCRIPTNAME#GUI"
+}
