@@ -225,7 +225,12 @@ Shader "Custom/#SCRIPTNAME#"
         }
 
         CGINCLUDE
-        #pragma target 5.0
+        #if UNITY_VERSION >= 202030
+        #    pragma target 3.0
+        #    pragma target 5.0 _SVDEPTH_LESSEQUAL _SVDEPTH_GREATEREQUAL
+        #else
+        #    pragma target 5.0
+        #endif  // UNITY_VERSION >= 202030
 
         #pragma multi_compile_instancing
         #pragma shader_feature_local _CALCSPACE_OBJECT _CALCSPACE_WORLD
