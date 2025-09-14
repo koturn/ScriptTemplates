@@ -2258,10 +2258,13 @@ Shader "Custom/#SCRIPTNAME#"
                 //     : mul((float3x3)unity_WorldToObject, getCameraDirVec(screenPos));
                 UNITY_BRANCH
                 if (UNITY_MATRIX_P[3][3] == 1.0) {
+                    // For directional light.
                     o.rayDirVec = mul((float3x3)unity_WorldToObject, -UNITY_MATRIX_V[2].xyz);
                 } else UNITY_BRANCH if (abs(unity_LightShadowBias.x) < 1.0e-5) {
+                    // For depth output of camera.
                     o.rayDirVec = o.rayOrigin - mul(unity_WorldToObject, float4(_WorldSpaceCameraPos, 1.0)).xyz;
                 } else {
+                    // For spot light.
                     o.rayDirVec = mul((float3x3)unity_WorldToObject, getCameraDirVec(screenPos));
                 }
             #    endif
