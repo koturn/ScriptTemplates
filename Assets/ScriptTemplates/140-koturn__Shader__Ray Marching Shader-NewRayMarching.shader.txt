@@ -15,7 +15,7 @@ Shader "Custom/#SCRIPTNAME#"
         [IntRange]
         _MaxLoopShadowCaster ("Maximum loop count for ShadowCaster", Range(8, 1024)) = 32
 
-        _MinRayLength ("Minimum length of the ray", Float) = 0.001
+        _MinMarchingLength ("Minimum marching length", Float) = 0.001
 
         [KeywordEnum(Use Property Value, Camera Clip, Depth Texture)]
         _ClipLengthMode ("Clip length mode", Int) = 1
@@ -300,8 +300,8 @@ Shader "Custom/#SCRIPTNAME#"
         uniform int _MaxLoopForwardAdd;
         //! Maximum loop count for ShadowCaster.
         uniform int _MaxLoopShadowCaster;
-        //! Minimum length of the ray.
-        uniform float _MinRayLength;
+        //! Minimum marching length.
+        uniform float _MinMarchingLength;
         //! Maximum length of the ray.
         uniform float _MaxRayLength;
         //! Maximum length inside the object.
@@ -733,7 +733,7 @@ Shader "Custom/#SCRIPTNAME#"
             const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
             float r = asfloat(0x7f800000);  // +inf
             float d = 0.0;
-            for (ro.rayStep = 0; abs(r) >= _MinRayLength && ro.rayLength < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+            for (ro.rayStep = 0; abs(r) >= _MinMarchingLength && ro.rayLength < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -744,7 +744,7 @@ Shader "Custom/#SCRIPTNAME#"
                     d = r;
                 }
             }
-            ro.isHit = abs(r) < _MinRayLength;
+            ro.isHit = abs(r) < _MinMarchingLength;
         #elif defined(_STEPMETHOD_ACCELARATION)
             // https://www.researchgate.net/publication/331547302_Accelerating_Sphere_Tracing
             // https://www.researchgate.net/publication/329152815_Accelerating_Sphere_Tracing
@@ -752,7 +752,7 @@ Shader "Custom/#SCRIPTNAME#"
             float r = map(rayOrigin + rayDirVec * ro.rayLength);
             float d = r;
 
-            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r * marchingFactor) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+            for (ro.rayStep = 1; r >= _MinMarchingLength && (ro.rayLength + r * marchingFactor) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -765,7 +765,7 @@ Shader "Custom/#SCRIPTNAME#"
                     d = r;
                 }
             }
-            ro.isHit = abs(r) < _MinRayLength;
+            ro.isHit = abs(r) < _MinMarchingLength;
         #elif defined(_STEPMETHOD_AUTO_RELAX)
             // https://www.researchgate.net/publication/370902411_Automatic_Step_Size_Relaxation_in_Sphere_Tracing
             const float marchingFactor = rsqrt(dot(rayDirVec, rayDirVec));
@@ -773,7 +773,7 @@ Shader "Custom/#SCRIPTNAME#"
             float d = r;
             float m = -1.0;
 
-            for (ro.rayStep = 1; r >= _MinRayLength && (ro.rayLength + r * marchingFactor) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+            for (ro.rayStep = 1; r >= _MinMarchingLength && (ro.rayLength + r * marchingFactor) < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 const float nextRayLength = ro.rayLength + d * marchingFactor;
                 const float nextR = map(rayOrigin + rayDirVec * nextRayLength);
                 if (d <= r + abs(nextR)) {
@@ -785,15 +785,15 @@ Shader "Custom/#SCRIPTNAME#"
                 }
                 d = 2.0 * r / (1.0 - m);
             }
-            ro.isHit = r < _MinRayLength;
+            ro.isHit = r < _MinMarchingLength;
         #else  // Assume: _STEPMETHOD_NORMAL
             const float marchingFactor = _MarchingFactor * rsqrt(dot(rayDirVec, rayDirVec));
             float d = asfloat(0x7f800000);  // +inf
-            for (ro.rayStep = 0; d >= _MinRayLength && ro.rayLength < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
+            for (ro.rayStep = 0; d >= _MinMarchingLength && ro.rayLength < rp.maxRayLength && ro.rayStep < maxLoop; ro.rayStep++) {
                 d = map(rayOrigin + rayDirVec * ro.rayLength);
                 ro.rayLength += d * marchingFactor;
             }
-            ro.isHit = d < _MinRayLength;
+            ro.isHit = d < _MinMarchingLength;
         #endif
 
             return ro;
