@@ -1,0 +1,228 @@
+Shader "koturn/#SCRIPTNAME#"
+{
+    Properties
+    {
+        _MainTex ("Main texture", 2D) = "white" {}
+        _Color ("Tint color for _MainTex", Color) = (1.0, 1.0, 1.0, 1.0)
+
+        _EmissionTex ("Emission texture", 2D) = "white" {}
+        [HDR] _EmissionColor ("Tint color for _EmissionTex", Color) = (0.0, 0.0, 0.0, 1.0)
+
+
+        // ------------------------------------------------------------
+        [Header(Rendering Parameters)]
+        [Space(8)]
+
+        [Enum(UnityEngine.Rendering.CullMode)]
+        _Cull ("Culling Mode", Int) = 2  // Default: Back
+
+        // [HideInInspector]
+        // [Enum(Opaque, 0, Cutout, 1, Fade, 2, Transparent, 3)]
+        // _Mode ("Blend Mode", Int) = 2
+
+        [Toggle(_ALPHATEST_ON)]
+        _AlphaTest ("Alpha test", Int) = 0
+
+        _Cutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlend ("Blend Source Factor", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlend ("Blend Destination Factor", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _SrcBlendAlpha ("Blend Source Factor for Alpha", Int) = 1  // Default: One
+
+        [Enum(UnityEngine.Rendering.BlendMode)]
+        _DstBlendAlpha ("Blend Destination Factor for Alpha", Int) = 0  // Default: Zero
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOp ("Blend Operation", Int) = 0  // Default: Add
+
+        [Enum(UnityEngine.Rendering.BlendOp)]
+        _BlendOpAlpha ("Blend Operation for Alpha", Int) = 0  // Default: Add
+
+        [Enum(Off, 0, On, 1)]
+        _ZWrite ("ZWrite", Int) = 1  // Default: On
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _ZTest ("ZTest", Int) = 4  // Default: LEqual
+
+        [Enum(False, 0, True, 1)]
+        _ZClip ("ZClip", Int) = 1  // Default: On
+
+        _OffsetFactor ("Offset Factor", Range(-1.0, 1.0)) = 0
+
+        _OffsetUnits ("Offset Units", Range(-1.0, 1.0)) = 0
+
+        // [ColorMask]
+        [IntRange]
+        _ColorMask ("Color Mask", Range(0, 15)) = 15  // Default: RGBA
+
+        [Enum(Off, 0, On, 1)]
+        _AlphaToMask ("Alpha To Mask", Int) = 0  // Default: Off
+
+
+        // ------------------------------------------------------------
+        [Header(Stencil Parameters)]
+        [Space(8)]
+
+        [IntRange]
+        _StencilRef ("Stencil Reference Value", Range(0, 255)) = 0
+
+        [IntRange]
+        _StencilReadMask ("Stencil ReadMask Value", Range(0, 255)) = 255
+
+        [IntRange]
+        _StencilWriteMask ("Stencil WriteMask Value", Range(0, 255)) = 255
+
+        [Enum(UnityEngine.Rendering.CompareFunction)]
+        _StencilComp ("Stencil Compare Function", Int) = 8  // Default: Always
+
+        [Enum (UnityEngine.Rendering.StencilOp)]
+        _StencilPass ("Stencil Pass", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilFail ("Stencil Fail", Int) = 0  // Default: Keep
+
+        [Enum(UnityEngine.Rendering.StencilOp)]
+        _StencilZFail ("Stencil ZFail", Int) = 0  // Default: Keep
+
+    }
+
+    // Blend Mode  | RenderQueue   | RenderType          | ZWrite | SrcBlend     | DstBlend              | AlphaTest
+    // ------------|---------------|---------------------|--------|--------------|-----------------------|----------
+    // Opaque      | "Geometry"    | "Opaque"            | On     | One (1)      | Zero (0)              | x
+    // Cutout      | "AlphaTest"   | "TransparentCutout" | On     | One (1)      | Zero (0)              | o
+    // Fade        | "Transparent" | "Transparent"       | Off    | SrcAlpha (5) | OneMinusSrcAlpha (10) | x
+    // Transparent | "Transparent" | "Transparent"       | Off    | One (1)      | OneMinusSrcAlpha (10) | x
+
+    SubShader
+    {
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "Queue" = "Geometry"
+            "VRCFallback" = "StandardFade"
+        }
+
+        Cull [_Cull]
+        Blend [_SrcBlend] [_DstBlend], [_SrcBlendAlpha] [_DstBlendAlpha]
+        BlendOp [_BlendOp], [_BlendOpAlpha]
+        ZWrite [_ZWrite]
+        ZTest [_ZTest]
+        ZClip [_ZClip]
+        Offset [_OffsetFactor], [_OffsetUnits]
+        ColorMask [_ColorMask]
+        AlphaToMask [_AlphaToMask]
+
+        Stencil
+        {
+            Ref [_StencilRef]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+            Comp [_StencilComp]
+            Pass [_StencilPass]
+            Fail [_StencilFail]
+            ZFail [_StencilZFail]
+        }
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma target 3.0
+            #pragma only_renderers d3d9 d3d11 d3d11_9x glcore gles gles3 metal vulkan xboxone ps4 n3ds wiiu switch
+            #pragma fragmentoption ARB_precision_hint_fastest
+            #pragma multi_compile_fog
+            #pragma shader_feature_local_vertex _ _ALPHATEST_ON
+
+            #include "UnityCG.cginc"
+
+            //! Main texture.
+            UNITY_DECLARE_TEX2D(_MainTex);
+            //! Scale and offset of `_MainTex`.
+            uniform float4 _MainTex_ST;
+            //! Tint color for `_MainTex`.
+            uniform float4 _Color;
+            //! Emission texture.
+            UNITY_DECLARE_TEX2D(_EmissionTex);
+            //! Multiplicative color for _EmissionTex.
+            uniform float4 _EmissionColor;
+            //! Alpha Cutoff.
+            uniform float _Cutoff;
+
+
+            /*!
+             * @brief Input data type for vertex shader function
+             */
+            struct appdata
+            {
+                float4 vertex : POSITION;
+                float2 texcoord : TEXCOORD0;
+            };
+
+            /*!
+             * @brief Input data type for fragment shader function
+             */
+            struct v2f
+            {
+                float4 pos : SV_POSITION;
+                float2 uv : TEXCOORD0;
+                UNITY_FOG_COORDS(1)
+            };
+
+
+            /*!
+             * @brief Vertex shader function
+             * @param [in] v  Input data
+             * @return color of texel at (i.uv.x, i.uv.y)
+             */
+            v2f vert(appdata v)
+            {
+                v2f o;
+                UNITY_INITIALIZE_OUTPUT(v2f, o);
+
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                o.pos = UnityObjectToClipPos(v.vertex);
+                // o.uv = v.texcoord;
+                o.uv = TRANSFORM_TEX(v.texcoord, _MainTex);
+
+                UNITY_TRANSFER_FOG(o, o.pos);
+
+                return o;
+            }
+
+            /*!
+             * @brief Fragment shader function
+             * @param [in] fi  Input data from vertex shader
+             * @return color of texel at (fi.uv.x, fi.uv.y)
+             */
+            fixed4 frag(v2f fi) : SV_Target
+            {
+                UNITY_SETUP_INSTANCE_ID(fi);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(fi);
+
+                const float4 mainColor = UNITY_SAMPLE_TEX2D(_MainTex, fi.uv) * _Color;
+            #if defined(_ALPHATEST_ON)
+                clip(mainColor.a - _Cutoff);
+            #endif  // defined(_ALPHATEST_ON)
+
+                const float4 emissionColor = UNITY_SAMPLE_TEX2D(_EmissionTex, fi.uv) * _EmissionColor;
+                float4 col = mainColor + emissionColor;
+
+                UNITY_APPLY_FOG(fi.fogCoord, col);
+
+                return col;
+            }
+            ENDCG
+        }
+    }
+
+    Fallback "Diffuse"
+    // CustomEditor "Koturn.#SCRIPTNAME#GUI"
+}
